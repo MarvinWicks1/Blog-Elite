@@ -1,0 +1,40 @@
+Creating a new Next.js app in /workspace/ai-content-gen.
+
+Using npm.
+
+Initializing project with template: app-tw 
+
+
+Installing dependencies:
+- react
+- react-dom
+- next
+
+Installing devDependencies:
+- typescript
+- @types/node
+- @types/react
+- @types/react-dom
+- @tailwindcss/postcss
+- tailwindcss
+- eslint
+- eslint-config-next
+- @eslint/eslintrc
+
+
+added 336 packages, and audited 337 packages in 17s
+
+138 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+Success! Created ai-content-gen at /workspace/ai-content-gen
+
+npm error code E404
+npm error 404 Not Found - GET https://registry.npmjs.org/@vercel%2fai - Not found
+npm error 404
+npm error 404  '@vercel/ai@*' is not in this registry.
+npm error 404
+npm error 404 Note that you can also install from a
+npm error 404 tarball, folder, http url, or git url.
+npm error A complete log of this run can be found in: /home/ubuntu/.npm/_logs/2025-08-29T14_33_04_841Z-debug-0.log
