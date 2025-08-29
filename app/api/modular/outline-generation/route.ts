@@ -67,18 +67,18 @@ export async function POST(req: NextRequest) {
 
     const provider = userSettings?.aiSettings?.selectedProvider || 'google';
     const model = userSettings?.aiSettings?.selectedModel || 'gemini-1.5-pro';
-    const apiKey = userSettings?.aiSettings?.apiKeys?.google;
+    const apiKey = userSettings?.aiSettings?.apiKeys?.google || process.env.GOOGLE_API_KEY;
 
     if (provider === 'google' && !apiKey) {
       return NextResponse.json(
-        { error: 'Missing Google API key in userSettings.aiSettings.apiKeys.google' },
+        { error: 'Missing Google API key (set userSettings.aiSettings.apiKeys.google or process.env.GOOGLE_API_KEY)' },
         { status: 400 }
       );
     }
 
     const aiModel = await getAIModel(provider, model, apiKey as string);
 
-    const systemInstruction = `You are a master content editor. Using the provided content brief, create a detailed article outline. Return ONLY valid JSON with keys: title, introductionPlan, mainSections (>=3), faqSection, conclusionPlan, estimatedTotalWordCount.`;
+    const systemInstruction = `You are a master content editor. Using the provided content brief, create a detailed article outline. Return ONLY valid JSON with keys: title, introductionPlan, mainSections (>=3), faqSection, conclusionPlan, estimatedTotalWordCount. No prose.`;
 
     const userPrompt = `Content brief (JSON):\n\n${JSON.stringify(contentBrief, null, 2)}\n\nRequirements:\n- Title reflecting the unique angle.\n- introductionPlan: compelling hook and promise.\n- mainSections: at least 3 sections, each with a heading and keyPoints (array). Include optional references and estimatedWordCount per section.\n- faqSection: include questions and approach for concise answers.\n- conclusionPlan: wrap-up + call-to-action.\n- estimatedTotalWordCount: integer (must be >= 2000).\nRespond with strict JSON only.`;
 
@@ -123,5 +123,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
-
