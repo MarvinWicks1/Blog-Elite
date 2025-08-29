@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const valid = parsed
+    let valid = parsed
       && typeof parsed.title === 'string'
       && typeof parsed.introductionPlan === 'string'
       && Array.isArray(parsed.mainSections) && parsed.mainSections.length >= 3
@@ -107,11 +107,47 @@ export async function POST(req: NextRequest) {
       && typeof parsed.conclusionPlan === 'string'
       && typeof parsed.estimatedTotalWordCount === 'number' && parsed.estimatedTotalWordCount >= 2000;
 
+    // One-shot corrective retry if validation fails
     if (!valid) {
-      return NextResponse.json(
-        { error: 'Validation failed: need >=3 mainSections and estimatedTotalWordCount >= 2000 with required fields.' },
-        { status: 422 }
-      );
+      const issues: string[] = [];
+      if (!parsed || typeof parsed.title !== 'string') issues.push('Include a non-empty string title');
+      if (!parsed || typeof parsed.introductionPlan !== 'string') issues.push('Include introductionPlan as a string');
+      if (!parsed || !Array.isArray(parsed?.mainSections) || parsed.mainSections.length < 3) issues.push('Provide at least 3 mainSections');
+      if (!parsed || !parsed.mainSections?.every(s => typeof s.heading === 'string' && Array.isArray(s.keyPoints))) issues.push('Each main section must have string heading and array keyPoints');
+      if (!parsed || !parsed.faqSection || !Array.isArray(parsed.faqSection.questions) || typeof parsed.faqSection.approach !== 'string') issues.push('Include faqSection with questions array and approach string');
+      if (!parsed || typeof parsed.conclusionPlan !== 'string') issues.push('Include conclusionPlan as a string');
+      if (!parsed || typeof parsed.estimatedTotalWordCount !== 'number' || parsed.estimatedTotalWordCount < 2000) issues.push('Set estimatedTotalWordCount to an integer >= 2000');
+
+      const repairInstruction = `You returned JSON that did not meet constraints. Fix ONLY the fields needed so that: mainSections >= 3; each section has heading and keyPoints (array); estimatedTotalWordCount >= 2000; include title, introductionPlan, faqSection (questions array and approach string), conclusionPlan. Return STRICT JSON, no prose.`;
+
+      const repairPrompt = `Original JSON (fix it):\n\n${JSON.stringify(parsed || {}, null, 2)}\n\nIssues detected:\n- ${issues.join('\n- ')}\n\nReturn corrected JSON only.`;
+
+      // @ts-ignore - provider specific shape
+      const repairResult = await aiModel.generateContent({ contents: [{ role: 'user', parts: [{ text: `${repairInstruction}\n\n${repairPrompt}` }] }] });
+      // @ts-ignore
+      const repairText: string = repairResult?.response?.text?.() || '';
+      try {
+        const repairJsonString = repairText.trim().replace(/^```json\n?|```$/g, '');
+        parsed = JSON.parse(repairJsonString);
+      } catch (_) {
+        // fall through to final 422
+      }
+
+      valid = parsed
+        && typeof parsed.title === 'string'
+        && typeof parsed.introductionPlan === 'string'
+        && Array.isArray(parsed.mainSections) && parsed.mainSections.length >= 3
+        && parsed.mainSections.every(s => typeof s.heading === 'string' && Array.isArray(s.keyPoints))
+        && parsed.faqSection && Array.isArray(parsed.faqSection.questions) && typeof parsed.faqSection.approach === 'string'
+        && typeof parsed.conclusionPlan === 'string'
+        && typeof parsed.estimatedTotalWordCount === 'number' && parsed.estimatedTotalWordCount >= 2000;
+
+      if (!valid) {
+        return NextResponse.json(
+          { error: 'Validation failed: need >=3 mainSections and estimatedTotalWordCount >= 2000 with required fields.' },
+          { status: 422 }
+        );
+      }
     }
 
     return NextResponse.json(parsed, { status: 200 });
