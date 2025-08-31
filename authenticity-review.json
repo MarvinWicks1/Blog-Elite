@@ -1,0 +1,87 @@
+{
+  "authenticityScore": 70,
+  "riskAssessment": {
+    "riskLevel": "MEDIUM",
+    "confidence": 8,
+    "detectionProbability": 40,
+    "riskFactors": [
+      "Some repetitive sentence structures",
+      "Overly formal technical language",
+      "Formulaic paragraph organization",
+      "Lack of personal voice and anecdotes"
+    ]
+  },
+  "aiPatternAnalysis": {
+    "repetitiveLanguage": 60,
+    "unnaturalFlow": 50,
+    "genericPhrasing": 65,
+    "structuralRigidity": 70,
+    "vocabularyDiversity": 65
+  },
+  "humanizationRecommendations": {
+    "critical": [
+      "Break up repetitive sentence patterns",
+      "Add personal anecdotes and real stories",
+      "Vary paragraph lengths and structures",
+      "Incorporate more conversational language"
+    ],
+    "important": [
+      "Use more natural transitions between ideas",
+      "Add emotional elements and human perspective",
+      "Include quotes from runners or experts",
+      "Vary vocabulary and avoid overused phrases"
+    ],
+    "optional": [
+      "Add humor where appropriate",
+      "Include personal opinions and insights",
+      "Use more active voice throughout",
+      "Add regional or cultural considerations"
+    ]
+  },
+  "contentStrengths": {
+    "humanLikeElements": [
+      "Good factual accuracy",
+      "Logical organization",
+      "Comprehensive coverage",
+      "Practical advice"
+    ],
+    "naturalLanguageFeatures": [
+      "Clear technical explanations",
+      "Professional terminology usage",
+      "Good use of examples"
+    ],
+    "authenticVoice": [
+      "Authoritative tone",
+      "Well-researched content",
+      "Helpful guidance"
+    ]
+  },
+  "contentWeaknesses": {
+    "aiIndicators": [
+      "Repetitive sentence structures",
+      "Overly formal technical language",
+      "Formulaic organization patterns"
+    ],
+    "roboticPatterns": [
+      "Consistent paragraph lengths",
+      "Predictable transitions",
+      "Lack of emotional variation"
+    ],
+    "artificialElements": [
+      "Generic phrasing",
+      "Missing personal touch",
+      "Overly structured content"
+    ]
+  },
+  "overallAssessment": {
+    "summary": "The content demonstrates strong technical knowledge and provides valuable information for beginners, but shows clear AI-generated patterns including repetitive structures, overly formal language, and lack of personal voice. While informative, it needs significant humanization to sound natural and engaging for the target audience.",
+    "authenticityGrade": "C",
+    "publicationReadiness": false,
+    "requiredActions": [
+      "Break repetitive patterns",
+      "Add personal elements",
+      "Improve natural flow",
+      "Enhance conversational tone"
+    ]
+  }
+}

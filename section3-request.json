@@ -1,0 +1,35 @@
+{
+  "outline": {
+    "title": "The Ultimate Guide to Running Shoes for Beginners",
+    "introductionPlan": "Hook readers with the importance of proper running shoes, preview the key factors to consider, and establish credibility",
+    "mainSections": [
+      {
+        "heading": "Understanding Your Foot Type and Gait",
+        "keyPoints": ["Pronation patterns", "Foot arch types", "Gait analysis importance", "Professional fitting benefits"],
+        "estimatedWordCount": 450
+      },
+      {
+        "heading": "Key Features to Look for in Running Shoes",
+        "keyPoints": ["Cushioning technology", "Breathability", "Durability", "Weight considerations", "Traction patterns"],
+        "estimatedWordCount": 500
+      },
+      {
+        "heading": "Choosing the Right Shoe for Your Running Style",
+        "keyPoints": ["Road vs trail running", "Distance considerations", "Speed training needs", "Racing shoes"],
+        "estimatedWordCount": 400
+      }
+    ],
+    "faqSection": {
+      "questions": ["How often should I replace my running shoes?", "What's the difference between neutral and stability shoes?", "Can I use the same shoes for different terrains?"],
+      "approach": "Address common beginner concerns with practical advice"
+    },
+    "conclusionPlan": "Summarize key selection criteria and encourage readers to make informed decisions",
+    "estimatedTotalWordCount": 1800
+  },
+  "sectionIndex": 2,
+  "previousSections": [
+    "Choosing the right running shoes starts with understanding your feet. This means identifying your foot type and analyzing your gait. These two factors play a crucial role in determining the support and cushioning you need to prevent injuries and optimize performance.",
+    "So, you've analyzed your gait and understand your foot type. Now comes the exciting part: diving into the specific features that make a running shoe the perfect fit. Finding the right balance of cushioning, breathability, durability, weight, and traction is crucial for a comfortable and injury-free running experience."
+  ],
+  "primaryKeyword": "running shoes"
+}

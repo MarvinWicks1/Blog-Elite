@@ -1,0 +1,58 @@
+{
+  "humanizedContent": {
+    "content": "Digital marketing has evolved significantly over the past decade, with artificial intelligence and machine learning playing increasingly important roles. From personalized content recommendations to automated ad optimization, AI is transforming how businesses connect with their audiences. This comprehensive guide explores the latest trends, tools, and strategies that marketers need to stay competitive in today's rapidly changing landscape.",
+    "title": "Digital Marketing Guide",
+    "sections": [
+      "Introduction to AI in Marketing",
+      "Personalization Strategies",
+      "Automation Tools and Platforms",
+      "Future Trends and Predictions"
+    ]
+  },
+  "articleTitle": "The Complete Guide to AI-Powered Digital Marketing in 2024",
+  "keywordResearch": {
+    "primaryKeyword": "AI digital marketing",
+    "keywordAnalysis": "High search volume, competitive keyword with growing interest in AI-powered marketing solutions",
+    "semanticKeywords": [
+      "artificial intelligence marketing",
+      "machine learning advertising",
+      "automated marketing campaigns",
+      "personalized marketing",
+      "predictive analytics"
+    ],
+    "longTailKeywords": [
+      "how to use AI for digital marketing",
+      "best AI marketing tools 2024",
+      "AI marketing automation examples",
+      "machine learning marketing strategies"
+    ],
+    "relatedQuestions": [
+      "How does AI improve digital marketing ROI?",
+      "What are the best AI marketing platforms?",
+      "How to implement AI in marketing campaigns?",
+      "What is the future of AI in marketing?"
+    ],
+    "contentGaps": [
+      "Practical implementation guides",
+      "ROI measurement frameworks",
+      "Integration with existing tools"
+    ],
+    "targetKeywordDensity": "2-3%",
+    "seoOpportunities": [
+      "Create comprehensive guides",
+      "Include case studies",
+      "Add interactive elements",
+      "Optimize for featured snippets"
+    ]
+  },
+  "userSettings": {
+    "aiSettings": {
+      "selectedProvider": "google",
+      "selectedModel": "gemini-1.5-pro",
+      "apiKeys": {
+        "google": "YOUR_GOOGLE_API_KEY_HERE",
+        "unsplash": "YOUR_UNSPLASH_ACCESS_KEY_HERE"
+      }
+    }
+  }
+}

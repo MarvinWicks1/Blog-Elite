@@ -1,0 +1,31 @@
+{
+  "outline": {
+    "title": "The Ultimate Guide to Running Shoes for Beginners",
+    "introductionPlan": "Hook readers with the importance of proper running shoes, preview the key factors to consider, and establish credibility",
+    "mainSections": [
+      {
+        "heading": "Understanding Your Foot Type and Gait",
+        "keyPoints": ["Pronation patterns", "Foot arch types", "Gait analysis importance", "Professional fitting benefits"],
+        "estimatedWordCount": 450
+      },
+      {
+        "heading": "Key Features to Look for in Running Shoes",
+        "keyPoints": ["Cushioning technology", "Breathability", "Durability", "Weight considerations", "Traction patterns"],
+        "estimatedWordCount": 500
+      },
+      {
+        "heading": "Choosing the Right Shoe for Your Running Style",
+        "keyPoints": ["Road vs trail running", "Distance considerations", "Speed training needs", "Racing shoes"],
+        "estimatedWordCount": 400
+      }
+    ],
+    "faqSection": {
+      "questions": ["How often should I replace my running shoes?", "What's the difference between neutral and stability shoes?", "Can I use the same shoes for different terrains?"],
+      "approach": "Address common beginner concerns with practical advice"
+    },
+    "conclusionPlan": "Summarize key selection criteria and encourage readers to make informed decisions",
+    "estimatedTotalWordCount": 1800
+  },
+  "sectionIndex": 0,
+  "primaryKeyword": "running shoes"
+}

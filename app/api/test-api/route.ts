@@ -9,6 +9,7 @@ interface RequestBody {
   userSettings?: {
     aiSettings?: {
       selectedProvider?: string;
+      selectedModel?: string;
       apiKeys?: {
         google?: string;
       };

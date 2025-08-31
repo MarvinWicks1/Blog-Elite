@@ -1,0 +1,85 @@
+{
+  "completeArticle": {
+    "title": "Test Article",
+    "introduction": "This is a test introduction.",
+    "sections": [
+      {
+        "title": "Test Section",
+        "content": "This is test content for the section."
+      }
+    ],
+    "conclusion": "This is a test conclusion."
+  },
+  "professionalReview": {
+    "criticProfile": {
+      "name": "Test Critic",
+      "credentials": "Test credentials",
+      "experience": "Test experience",
+      "reviewDate": "2024-01-15"
+    },
+    "qualityScores": {
+      "contentStructure": 7,
+      "writingQuality": 7,
+      "seoOptimization": 7,
+      "audienceEngagement": 7,
+      "factualAccuracy": 7,
+      "overallPresentation": 7
+    },
+    "overallScore": 7.0,
+    "detailedAnalysis": {
+      "strengths": ["Test strength"],
+      "weaknesses": ["Test weakness"],
+      "contentGaps": ["Test gap"],
+      "styleObservations": "Test observation"
+    },
+    "improvementRecommendations": {
+      "critical": ["Test critical improvement"],
+      "important": ["Test important improvement"],
+      "optional": ["Test optional improvement"]
+    },
+    "publicationReadiness": {
+      "isReady": false,
+      "confidence": 7,
+      "requiredActions": ["Test action"]
+    },
+    "professionalOpinion": "Test opinion"
+  },
+  "authenticityReview": {
+    "authenticityScore": 70,
+    "riskAssessment": {
+      "riskLevel": "MEDIUM",
+      "confidence": 7,
+      "detectionProbability": 40,
+      "riskFactors": ["Test risk factor"]
+    },
+    "aiPatternAnalysis": {
+      "repetitiveLanguage": 60,
+      "unnaturalFlow": 50,
+      "genericPhrasing": 65,
+      "structuralRigidity": 70,
+      "vocabularyDiversity": 65
+    },
+    "humanizationRecommendations": {
+      "critical": ["Test critical humanization"],
+      "important": ["Test important humanization"],
+      "optional": ["Test optional humanization"],
+      "specificExamples": ["Test example"]
+    },
+    "contentStrengths": {
+      "humanLikeElements": ["Test strength"],
+      "naturalLanguageFeatures": ["Test feature"],
+      "authenticVoice": ["Test voice"]
+    },
+    "contentWeaknesses": {
+      "aiIndicators": ["Test indicator"],
+      "roboticPatterns": ["Test pattern"],
+      "artificialElements": ["Test element"]
+    },
+    "overallAssessment": {
+      "summary": "Test summary",
+      "authenticityGrade": "C",
+      "publicationReadiness": false,
+      "requiredActions": ["Test action"]
+    }
+  }
+}

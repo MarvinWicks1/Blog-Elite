@@ -1,0 +1,17 @@
+# API Keys for Smart Image Enhancement API
+# Copy this content to a .env.local file and fill in your actual API keys
+
+# Google AI API Key (required for AI-powered image strategy generation)
+# Get your key from: https://makersuite.google.com/app/apikey
+GOOGLE_API_KEY=your_google_ai_api_key_here
+
+# Unsplash API Access Key (required for image fetching)
+# Get your key from: https://unsplash.com/developers
+# You can use either of these variable names:
+UNSPLASH_ACCESS_KEY=your_unsplash_access_key_here
+# OR
+UPSPLASH_API_KEY=your_unsplash_api_key_here
+
+# Optional: Override default AI provider and model
+# AI_PROVIDER=google
+# AI_MODEL=gemini-1.5-pro
