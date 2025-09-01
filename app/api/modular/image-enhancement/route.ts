@@ -325,7 +325,14 @@ CONSTRAINTS:
     const enhancedRecommendations = await Promise.all(
       parsed.imageRecommendations.map(async (rec) => {
         if (fallbackMode) {
-          return rec;
+          // Fallback to Unsplash Source (no API key required) for actual images
+          const q = encodeURIComponent(rec.unsplashQuery || keywordResearch.primaryKeyword)
+          return {
+            ...rec,
+            unsplashUrl: `https://source.unsplash.com/1600x900/?${q}`,
+            thumbnailUrl: `https://source.unsplash.com/400x225/?${q}`,
+            downloadUrl: `https://source.unsplash.com/1600x900/?${q}`
+          };
         }
         try {
           // Search Unsplash for relevant images
@@ -358,8 +365,14 @@ CONSTRAINTS:
           console.warn(`Failed to fetch Unsplash data for query: ${rec.unsplashQuery}`, error);
         }
         
-        // Return original recommendation if Unsplash fetch fails
-        return rec;
+        // Fallback to Unsplash Source if API search fails
+        const q2 = encodeURIComponent(rec.unsplashQuery || keywordResearch.primaryKeyword)
+        return {
+          ...rec,
+          unsplashUrl: `https://source.unsplash.com/1600x900/?${q2}`,
+          thumbnailUrl: `https://source.unsplash.com/400x225/?${q2}`,
+          downloadUrl: `https://source.unsplash.com/1600x900/?${q2}`
+        };
       })
     );
 

@@ -582,6 +582,22 @@ export default function MobileFixedInterface() {
                       </div>
                     </div>
                   )}
+
+                  {/* Images Preview */}
+                  {finalContent.images && finalContent.images.length > 0 && (
+                    <div className="mt-4">
+                      <strong className="text-blue-700">Images:</strong>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
+                        {finalContent.images.slice(0, 6).map((img: any, idx: number) => (
+                          <figure key={idx} className="bg-white rounded border p-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={img.thumbnailUrl || img.unsplashUrl || img.downloadUrl || img.url} alt={img.altText || img.description || 'image'} className="w-full h-32 object-cover rounded" />
+                            <figcaption className="mt-1 text-xs text-gray-600 line-clamp-2">{img.caption || img.description}</figcaption>
+                          </figure>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Debug Information */}
                   <div className="mt-4 p-3 bg-gray-50 rounded border border-gray-200">
