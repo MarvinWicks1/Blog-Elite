@@ -5,10 +5,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     console.log('🔧 Assemble Content API - Received body:', JSON.stringify(body, null, 2));
     
-    const { title, introduction, sections, faqs, conclusion, primaryKeyword } = body;
+    const { title, introduction, sections, faqs, conclusion, primaryKeyword, outline } = body;
     
     // Assemble the content
-    const assembledContent = `${title || 'Generated Blog Post'}
+    const resolvedTitle = title || outline?.title || 'Generated Blog Post';
+    const assembledContent = `${resolvedTitle}
 
 ${introduction || 'Introduction placeholder'}
 

@@ -281,6 +281,11 @@ RESPOND WITH STRICT JSON ONLY - NO MARKDOWN, NO PROSE, NO EXPLANATIONS OUTSIDE T
       parsed.overallScore = Math.round(calculatedScore * 10) / 10;
     }
 
+    // Enforce returned overallScore to 1-10 range
+    if (parsed.overallScore < 1 || parsed.overallScore > 10) {
+      parsed.overallScore = Math.min(10, Math.max(1, parsed.overallScore));
+    }
+
     // Validate that feedback is actionable
     if (!parsed.improvementRecommendations || 
         (!parsed.improvementRecommendations.critical?.length && 
