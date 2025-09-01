@@ -6,23 +6,27 @@ export async function POST(req: NextRequest) {
     console.log('🔧 Assemble Content API - Received body:', JSON.stringify(body, null, 2));
     
     const { title, introduction, sections, faqs, conclusion, primaryKeyword } = body;
+
+    // Ensure all inputs are treated as plain text to avoid leaking HTML/comments downstream
+    const stripHtmlComments = (text: string) => typeof text === 'string' ? text.replace(/<!--[\s\S]*?-->/g, '') : '';
+    const toPlain = (text: any) => typeof text === 'string' ? stripHtmlComments(text).replace(/<[^>]+>/g, '') : '';
     
     // Assemble the content
-    const assembledContent = `${title || 'Generated Blog Post'}
+    const assembledContent = `${toPlain(title) || 'Generated Blog Post'}
 
-${introduction || 'Introduction placeholder'}
+${toPlain(introduction) || 'Introduction placeholder'}
 
 ${sections?.map((section: string, index: number) => `## Section ${index + 1}
 
-${section}`).join('\n\n') || '## Main Content\n\nContent sections will appear here.'}
+${toPlain(section)}`).join('\n\n') || '## Main Content\n\nContent sections will appear here.'}
 
 ${faqs ? `## Frequently Asked Questions
 
-${faqs.map((faq: any) => `### ${faq.question}
+${faqs.map((faq: any) => `### ${toPlain(faq.question)}
 
-${faq.answer}`).join('\n\n')}` : ''}
+${toPlain(faq.answer)}`).join('\n\n')}` : ''}
 
-${conclusion || '## Conclusion\n\nConclusion will appear here.'}`;
+${toPlain(conclusion) || '## Conclusion\n\nConclusion will appear here.'}`;
 
     const wordCount = assembledContent.split(' ').length;
     

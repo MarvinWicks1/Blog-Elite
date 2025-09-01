@@ -31,11 +31,10 @@ export async function POST(req: NextRequest) {
     
     const before = computeHeuristics(content);
 
-    // Generate mock humanized content
+    // Generate mock humanized content (plain text only)
     const mockHumanizedContent = content
       .replace(/\butilize\b/gi, 'use')
-      .replace(/\bmoreover\b/gi, 'also')
-      + `\n\n<!-- Humanized Content -->\n<!-- Enhanced with conversational transitions, concrete examples, and varied sentence structures. -->`;
+      .replace(/\bmoreover\b/gi, 'also');
     const after = computeHeuristics(mockHumanizedContent);
     
     const mockHumanization = {

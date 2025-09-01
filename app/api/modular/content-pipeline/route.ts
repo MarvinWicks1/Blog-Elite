@@ -489,6 +489,10 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
+    // Utility: strip HTML comments and tags for plain-text downstream context
+    const stripHtmlComments = (text: string) => text?.replace(/<!--[\s\S]*?-->/g, '') ?? '';
+    const stripBasicHtml = (text: string) => stripHtmlComments(text).replace(/<[^>]+>/g, '');
+
     // Stage 8: Content Humanization
     console.log('🤖 Stage 8: Humanizing Content');
     try {
@@ -502,13 +506,15 @@ export async function POST(req: NextRequest) {
         throw new Error('Cannot proceed with content humanization: optimized content is missing from previous stage');
       }
 
+      const contentForHumanization = stripBasicHtml(stages.seoImplementation.data.optimizedContent);
       const humanizationResponse = await makeAPICall(
         `${req.nextUrl.origin}/api/modular/humanize-content`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            content: stages.seoImplementation.data.optimizedContent,
+            // Pass plain text to reduce cross-step noise
+            content: contentForHumanization,
             primaryKeyword,
             userSettings
           })
