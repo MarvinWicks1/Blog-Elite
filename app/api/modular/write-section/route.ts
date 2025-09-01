@@ -3,10 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    console.log('📚 Write Section API - Received body:', JSON.stringify(body, null, 2));
+    const safeStringify = (obj: any) => JSON.stringify(obj, (k, v) => (k.toLowerCase().includes('apikey') ? '***' : v), 2);
+    console.log('📚 Write Section API - Received body:', safeStringify(body));
     
     const sectionIndex = body?.sectionIndex || 0;
     const primaryKeyword = body?.primaryKeyword || 'topic';
+    const headingFromOutline = body?.outline?.mainSections?.[sectionIndex]?.heading;
+    const sectionHeading = headingFromOutline || `Section ${sectionIndex + 1}`;
     const userSettings = body?.userSettings || {};
     const provider = userSettings?.aiSettings?.selectedProvider || 'google';
     const apiKey = userSettings?.aiSettings?.apiKeys?.google || process.env.GOOGLE_API_KEY;
@@ -16,7 +19,7 @@ export async function POST(req: NextRequest) {
     }
     
     // Generate a mock section
-    const mockSection = `## Section ${sectionIndex + 1}: Understanding ${primaryKeyword}
+    const mockSection = `## ${sectionHeading}
 
 This section provides comprehensive coverage of ${primaryKeyword} and its importance in today's context. We'll explore the fundamental concepts and practical applications that make this topic so valuable.
 

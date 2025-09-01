@@ -337,15 +337,35 @@ Respond with strict JSON only, no additional text.`;
     const textResponse: string = aiResult?.response?.text?.() || '';
 
     let parsed: RefinedArticleResponse | null = null;
-    try {
-      const jsonString = textResponse.trim().replace(/^```json\n?|```$/g, '');
-      parsed = JSON.parse(jsonString);
-    } catch (parseError) {
-      console.error('AI response parsing failed:', parseError);
-      return NextResponse.json(
-        { error: 'AI did not return valid JSON for article refinement' },
-        { status: 502 }
-      );
+    let jsonParseAttempts = 0;
+    const maxParseAttempts = 3;
+    while (jsonParseAttempts < maxParseAttempts && !parsed) {
+      try {
+        let jsonString = textResponse.trim();
+        jsonString = jsonString.replace(/^```json\n?|```$/g, '');
+        jsonString = jsonString.replace(/^```\n?|```$/g, '');
+        const match = jsonString.match(/\{[\s\S]*\}/);
+        if (match) jsonString = match[0];
+        parsed = JSON.parse(jsonString);
+      } catch (parseError) {
+        jsonParseAttempts++;
+        if (jsonParseAttempts >= maxParseAttempts) {
+          return NextResponse.json(
+            { error: 'AI did not return valid JSON for article refinement' },
+            { status: 502 }
+          );
+        }
+        try {
+          const lastBraceIndex = textResponse.lastIndexOf('}');
+          if (lastBraceIndex > 0) {
+            const truncated = textResponse.substring(0, lastBraceIndex + 1);
+            parsed = JSON.parse(truncated);
+            break;
+          }
+        } catch (_) {
+          // continue loop
+        }
+      }
     }
 
     // Validate AI response structure
