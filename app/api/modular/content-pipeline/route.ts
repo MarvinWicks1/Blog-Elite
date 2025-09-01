@@ -673,51 +673,10 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
-    // Stage 8.5: Keyword Research (Required for Image Enhancement)
-    // This stage is essential for the image enhancement API which requires keyword research data
-    console.log('🔍 Stage 8.5: Performing Keyword Research');
-    emitProgress(jobId, { type: 'stage', stage: 'keywordResearch', status: 'start', timestamp: Date.now() })
-    let keywordResearchData;
-    try {
-      const keywordResearchResponse = await makeAPICall(
-        `${req.nextUrl.origin}/api/modular/keyword-research`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            primaryKeyword,
-            topic,
-            targetAudience,
-            userSettings
-          })
-        },
-        30000 // 30 second timeout
-      );
-
-      if (keywordResearchResponse.ok) {
-        keywordResearchData = await keywordResearchResponse.json();
-        
-        // Validate keyword research data structure
-        if (!keywordResearchData.primaryKeyword || !keywordResearchData.semanticKeywords || !keywordResearchData.relatedQuestions) {
-          throw new Error('Invalid keyword research data structure - missing required fields');
-        }
-        
-        stages.keywordResearch = { status: 'completed', data: keywordResearchData };
-        console.log('✅ Keyword research completed successfully');
-        emitProgress(jobId, { type: 'stage', stage: 'keywordResearch', status: 'complete', timestamp: Date.now() })
-      } else {
-        const errorText = await keywordResearchResponse.text();
-        throw new Error(`Keyword research failed: ${keywordResearchResponse.status} - ${errorText}`);
-      }
-    } catch (error) {
-      console.error('❌ Keyword research failed:', error);
-      emitProgress(jobId, { type: 'stage', stage: 'keywordResearch', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
-      stages.keywordResearch = { status: 'failed', data: null };
-      return NextResponse.json({
-        pipelineStatus: 'failed',
-        stages,
-        error: `Failed to perform keyword research: ${error instanceof Error ? error.message : 'Unknown error'}`
-      }, { status: 500 });
+    // Note: Keyword research executed earlier; ensure data exists before images
+    if (!keywordResearchData) {
+      console.warn('⚠️ Missing keyword research from earlier stage; proceeding without image enhancement.');
+      stages.keywordResearch = stages.keywordResearch?.status ? stages.keywordResearch : { status: 'failed', data: null };
     }
 
     // Stage 9: Smart Image Enhancement

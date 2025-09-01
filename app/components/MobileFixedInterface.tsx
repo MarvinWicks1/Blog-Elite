@@ -100,8 +100,7 @@ export default function MobileFixedInterface() {
     setFinalContent(null)
 
     try {
-      // kick off simulated live progress while backend runs
-      startProgressInterval()
+      // disable simulated progress; rely on SSE from backend stages
       // Pull user settings (including API keys) from localStorage to send to the API
       let userSettings: any = undefined
       try {
