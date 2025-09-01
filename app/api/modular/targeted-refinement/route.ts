@@ -374,6 +374,52 @@ Respond with strict JSON only, no additional text.`;
 
     const { professionalScore, authenticityScore, publicationReadiness, confidence } = parsed.finalQualityMetrics;
     
+    // QUALITY THRESHOLD ENFORCEMENT
+    const MIN_PROFESSIONAL_SCORE = 8.0;
+    const MIN_AUTHENTICITY_SCORE = 80;
+    const MIN_CONFIDENCE_SCORE = 7.0;
+    
+    console.log('🎯 Quality Threshold Check:', {
+      professionalScore,
+      authenticityScore,
+      confidence,
+      publicationReadiness,
+      meetsProfessionalThreshold: professionalScore >= MIN_PROFESSIONAL_SCORE,
+      meetsAuthenticityThreshold: authenticityScore >= MIN_AUTHENTICITY_SCORE,
+      meetsConfidenceThreshold: confidence >= MIN_CONFIDENCE_SCORE
+    });
+    
+    // Check if quality thresholds are met
+    const meetsQualityThresholds = 
+      professionalScore >= MIN_PROFESSIONAL_SCORE &&
+      authenticityScore >= MIN_AUTHENTICITY_SCORE &&
+      confidence >= MIN_CONFIDENCE_SCORE;
+    
+    if (!meetsQualityThresholds) {
+      console.warn('⚠️ Quality thresholds not met - triggering refinement cycle');
+      
+      // Return structured response indicating need for refinement
+      return NextResponse.json({
+        success: false,
+        needsRefinement: true,
+        qualityIssues: {
+          professionalScore: professionalScore < MIN_PROFESSIONAL_SCORE ? `Below threshold (${professionalScore}/${MIN_PROFESSIONAL_SCORE})` : null,
+          authenticityScore: authenticityScore < MIN_AUTHENTICITY_SCORE ? `Below threshold (${authenticityScore}/${MIN_AUTHENTICITY_SCORE})` : null,
+          confidence: confidence < MIN_CONFIDENCE_SCORE ? `Below threshold (${confidence}/${MIN_CONFIDENCE_SCORE})` : null
+        },
+        refinement: parsed,
+        finalArticle: parsed.refinedArticle,
+        metadata: {
+          refinementDate: new Date().toISOString(),
+          articleTitle: parsed.refinedArticle.title,
+          qualityStatus: 'needs_improvement',
+          refinementRequired: true
+        }
+      });
+    }
+    
+    console.log('✅ Quality thresholds met - article ready for publication');
+    
     if (typeof professionalScore !== 'number' || professionalScore < 1 || professionalScore > 10) {
       return NextResponse.json(
         { error: 'Invalid professionalScore: must be a number between 1-10' },

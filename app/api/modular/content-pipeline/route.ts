@@ -88,6 +88,132 @@ export async function POST(req: NextRequest) {
       }
     };
 
+    // DATA INTEGRITY VALIDATION FUNCTIONS
+    const validatePhase1To2Data = (brief: any, outline: any): boolean => {
+      console.log('🔍 Phase 1 to 2 Data Validation:');
+      
+      // Validate brief structure
+      if (!brief || typeof brief !== 'object') {
+        console.error('❌ Brief validation failed: not an object');
+        return false;
+      }
+      
+      const requiredBriefFields = ['title', 'summary', 'keyObjectives', 'contentStructure'];
+      for (const field of requiredBriefFields) {
+        if (!brief[field]) {
+          console.error(`❌ Brief validation failed: missing ${field}`);
+          return false;
+        }
+      }
+      
+      // Validate outline structure
+      if (!outline || typeof outline !== 'object') {
+        console.error('❌ Outline validation failed: not an object');
+        return false;
+      }
+      
+      if (!outline.title || !outline.mainSections || !Array.isArray(outline.mainSections)) {
+        console.error('❌ Outline validation failed: missing title or mainSections array');
+        return false;
+      }
+      
+      if (outline.mainSections.length < 3) {
+        console.error('❌ Outline validation failed: insufficient main sections');
+        return false;
+      }
+      
+      // Validate each section
+      for (let i = 0; i < outline.mainSections.length; i++) {
+        const section = outline.mainSections[i];
+        if (!section.heading || !section.keyPoints || !Array.isArray(section.keyPoints)) {
+          console.error(`❌ Outline validation failed: invalid section ${i + 1}`);
+          return false;
+        }
+      }
+      
+      console.log('✅ Phase 1 to 2 validation passed');
+      return true;
+    };
+
+    const validatePhase2To3Data = (assembledContent: any): boolean => {
+      console.log('🔍 Phase 2 to 3 Data Validation:');
+      
+      if (!assembledContent || typeof assembledContent !== 'object') {
+        console.error('❌ Assembled content validation failed: not an object');
+        return false;
+      }
+      
+      if (!assembledContent.assembledContent || typeof assembledContent.assembledContent !== 'string') {
+        console.error('❌ Assembled content validation failed: missing assembledContent text');
+        return false;
+      }
+      
+      const contentLength = assembledContent.assembledContent.length;
+      if (contentLength < 1000) {
+        console.error('❌ Assembled content validation failed: content too short');
+        return false;
+      }
+      
+      console.log('✅ Phase 2 to 3 validation passed');
+      return true;
+    };
+
+    const validatePhase3To4Data = (seoOptimizedContent: any): boolean => {
+      console.log('🔍 Phase 3 to 4 Data Validation:');
+      
+      if (!seoOptimizedContent || typeof seoOptimizedContent !== 'object') {
+        console.error('❌ SEO optimized content validation failed: not an object');
+        return false;
+      }
+      
+      if (!seoOptimizedContent.optimizedContent || typeof seoOptimizedContent.optimizedContent !== 'string') {
+        console.error('❌ SEO optimized content validation failed: missing optimizedContent text');
+        return false;
+      }
+      
+      const contentLength = seoOptimizedContent.optimizedContent.length;
+      if (contentLength < 1000) {
+        console.error('❌ SEO optimized content validation failed: content too short');
+        return false;
+      }
+      
+      console.log('✅ Phase 3 to 4 validation passed');
+      return true;
+    };
+
+    const validatePhase4To5Data = (humanizedContent: any, reviewScores: any): boolean => {
+      console.log('🔍 Phase 4 to 5 Data Validation:');
+      
+      if (!humanizedContent || typeof humanizedContent !== 'object') {
+        console.error('❌ Humanized content validation failed: not an object');
+        return false;
+      }
+      
+      if (!humanizedContent.humanizedContent || typeof humanizedContent.humanizedContent !== 'string') {
+        console.error('❌ Humanized content validation failed: missing humanizedContent text');
+        return false;
+      }
+      
+      if (!reviewScores || typeof reviewScores !== 'object') {
+        console.error('❌ Review scores validation failed: not an object');
+        return false;
+      }
+      
+      if (!reviewScores.qualityScores || !reviewScores.overallScore) {
+        console.error('❌ Review scores validation failed: missing quality scores');
+        return false;
+      }
+      
+      const contentLength = humanizedContent.humanizedContent.length;
+      if (contentLength < 1000) {
+        console.error('❌ Humanized content validation failed: content too short');
+        return false;
+      }
+      
+      console.log('✅ Phase 4 to 5 validation passed');
+      return true;
+    };
+
     // Stage 0: Generate Brief and Outline if not provided
     let pipelineBrief = brief;
     let pipelineOutline = outline;
@@ -103,7 +229,8 @@ export async function POST(req: NextRequest) {
             body: JSON.stringify({
               primaryKeyword: primaryKeyword.trim(),
               topic: topic?.trim() || '',
-              targetAudience: targetAudience?.trim() || ''
+              targetAudience: targetAudience?.trim() || '',
+              userSettings
             })
           },
           30000 // 30 second timeout
@@ -137,7 +264,8 @@ export async function POST(req: NextRequest) {
             body: JSON.stringify({
               primaryKeyword: primaryKeyword.trim(),
               topic: topic?.trim() || '',
-              targetAudience: targetAudience?.trim() || ''
+              targetAudience: targetAudience?.trim() || '',
+              userSettings
             })
           },
           30000 // 30 second timeout
@@ -158,6 +286,16 @@ export async function POST(req: NextRequest) {
           error: `Failed to generate content outline: ${error instanceof Error ? error.message : 'Unknown error'}`
         }, { status: 500 });
       }
+    }
+
+    // PHASE 1 TO 2 VALIDATION
+    if (!validatePhase1To2Data(pipelineBrief, pipelineOutline)) {
+      console.error('❌ Phase 1 to 2 data validation failed');
+      return NextResponse.json({
+        pipelineStatus: 'failed',
+        stages: {},
+        error: 'Data integrity validation failed between Phase 1 and Phase 2'
+      }, { status: 422 });
     }
 
     // Validate that we have the required data
@@ -393,6 +531,16 @@ export async function POST(req: NextRequest) {
         const assembleData = await assembleResponse.json();
         stages.contentAssembly = { status: 'completed', data: assembleData };
         console.log('✅ Content assembled successfully');
+        
+        // PHASE 2 TO 3 VALIDATION
+        if (!validatePhase2To3Data(assembleData)) {
+          console.error('❌ Phase 2 to 3 data validation failed');
+          return NextResponse.json({
+            pipelineStatus: 'failed',
+            stages,
+            error: 'Data integrity validation failed between Phase 2 and Phase 3'
+          }, { status: 422 });
+        }
       } else {
         const errorText = await assembleResponse.text();
         throw new Error(`Content assembly failed: ${assembleResponse.status} - ${errorText}`);
@@ -464,6 +612,16 @@ export async function POST(req: NextRequest) {
         const seoImplementationData = await seoImplementationResponse.json();
         stages.seoImplementation = { status: 'completed', data: seoImplementationData };
         console.log('✅ SEO implementation completed successfully');
+        
+        // PHASE 3 TO 4 VALIDATION
+        if (!validatePhase3To4Data(seoImplementationData)) {
+          console.error('❌ Phase 3 to 4 data validation failed');
+          return NextResponse.json({
+            pipelineStatus: 'failed',
+            stages,
+            error: 'Data integrity validation failed between Phase 3 and Phase 4'
+          }, { status: 422 });
+        }
       } else {
         const errorText = await seoImplementationResponse.text();
         throw new Error(`SEO implementation failed: ${seoImplementationResponse.status} - ${errorText}`);
@@ -525,6 +683,8 @@ export async function POST(req: NextRequest) {
           contentLength: humanizationData.humanizedContent.length,
           humanizationScore: humanizationData.humanizationScore
         });
+        
+        // PHASE 4 TO 5 VALIDATION (will be completed after professional review)
       } else {
         const errorText = await humanizationResponse.text();
         throw new Error(`Content humanization failed: ${humanizationResponse.status} - ${errorText}`);
@@ -726,6 +886,16 @@ export async function POST(req: NextRequest) {
           hasImprovementRecommendations: true,
           overallScore: professionalReviewData.overallScore
         });
+        
+        // PHASE 4 TO 5 VALIDATION
+        if (!validatePhase4To5Data(stages.humanization.data, professionalReviewData)) {
+          console.error('❌ Phase 4 to 5 data validation failed');
+          return NextResponse.json({
+            pipelineStatus: 'failed',
+            stages,
+            error: 'Data integrity validation failed between Phase 4 and Phase 5'
+          }, { status: 422 });
+        }
       } else {
         const errorText = await professionalReviewResponse.text();
         throw new Error(`Professional review failed: ${professionalReviewResponse.status} - ${errorText}`);
