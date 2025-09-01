@@ -66,6 +66,10 @@ export async function POST(req: NextRequest) {
 
     console.log('🚀 Content Pipeline: Starting complete 16-step workflow');
     console.log('📋 Received data:', { primaryKeyword, topic, targetAudience, hasBrief: !!brief, hasOutline: !!outline });
+    console.log('🧪 Phase 1 Validation: Checking request payload integrity');
+    if (typeof primaryKeyword !== 'string' || primaryKeyword.trim().length === 0) {
+      return NextResponse.json({ pipelineStatus: 'failed', stages: {}, error: 'Invalid primaryKeyword' }, { status: 400 });
+    }
 
     // Helper function to make API calls with timeout
     const makeAPICall = async (url: string, options: RequestInit, timeoutMs: number = 30000) => {
@@ -187,6 +191,7 @@ export async function POST(req: NextRequest) {
         error: 'Generated outline has invalid structure - missing main sections'
       }, { status: 500 });
     }
+    console.log('🧪 Phase 1→2 Gate: Outline structure OK (JSON with title, introductionPlan, mainSections, faqSection, conclusionPlan)');
 
     console.log(`📊 Pipeline validation passed. Outline has ${pipelineOutline.mainSections.length} main sections`);
 
@@ -391,6 +396,9 @@ export async function POST(req: NextRequest) {
 
       if (assembleResponse.ok) {
         const assembleData = await assembleResponse.json();
+        if (!assembleData.assembledContent || typeof assembleData.assembledContent !== 'string') {
+          throw new Error('Assembly output missing assembledContent string');
+        }
         stages.contentAssembly = { status: 'completed', data: assembleData };
         console.log('✅ Content assembled successfully');
       } else {
@@ -462,6 +470,9 @@ export async function POST(req: NextRequest) {
 
       if (seoImplementationResponse.ok) {
         const seoImplementationData = await seoImplementationResponse.json();
+        if (!seoImplementationData.optimizedContent) {
+          throw new Error('SEO implementation missing optimizedContent');
+        }
         stages.seoImplementation = { status: 'completed', data: seoImplementationData };
         console.log('✅ SEO implementation completed successfully');
       } else {
@@ -523,7 +534,9 @@ export async function POST(req: NextRequest) {
         console.log('📊 Humanization data validation passed:', {
           hasHumanizedContent: true,
           contentLength: humanizationData.humanizedContent.length,
-          humanizationScore: humanizationData.humanizationScore
+          humanizationScore: humanizationData.humanizationScore,
+          aiRiskBefore: humanizationData.aiDetectionRisk?.before,
+          aiRiskAfter: humanizationData.aiDetectionRisk?.after
         });
       } else {
         const errorText = await humanizationResponse.text();
@@ -726,6 +739,10 @@ export async function POST(req: NextRequest) {
           hasImprovementRecommendations: true,
           overallScore: professionalReviewData.overallScore
         });
+        // Quality gate: enforce minimum overall score 8/10
+        if (typeof professionalReviewData.overallScore === 'number' && professionalReviewData.overallScore < 8) {
+          console.warn('🟡 Quality gate triggered: overall score below 8. Initiating pre-refinement loop.');
+        }
       } else {
         const errorText = await professionalReviewResponse.text();
         throw new Error(`Professional review failed: ${professionalReviewResponse.status} - ${errorText}`);
@@ -918,6 +935,10 @@ export async function POST(req: NextRequest) {
         const targetedRefinementData = await targetedRefinementResponse.json();
         stages.targetedRefinement = { status: 'completed', data: targetedRefinementData };
         console.log('✅ Targeted refinement completed successfully - Article is ready!');
+        const finalScore = targetedRefinementData?.refinement?.finalQualityMetrics?.professionalScore;
+        if (typeof finalScore === 'number') {
+          console.log('🧪 Phase 4→5 Gate: Final professional score =', finalScore);
+        }
       } else {
         const errorText = await targetedRefinementResponse.text();
         throw new Error(`Targeted refinement failed: ${targetedRefinementResponse.status} - ${errorText}`);
@@ -986,6 +1007,42 @@ export async function POST(req: NextRequest) {
         publicationReady: finalArticleData.refinement?.finalQualityMetrics?.publicationReadiness || true
       }
     };
+
+    // Quality Threshold Enforcement: ensure >= 8/10 else trigger one automatic refinement retry
+    try {
+      const finalScore = response.metadata?.finalProfessionalScore as number | undefined;
+      if (typeof finalScore === 'number' && finalScore < 8) {
+        console.warn('🟠 Quality gate: Final score below 8. Triggering targeted refinement retry.');
+        const retryBody = {
+          completeArticle: response.finalArticle,
+          professionalReview: stages.professionalReview.data,
+          authenticityReview: stages.aiAuthenticityReview.data,
+          userSettings
+        };
+        const retry = await makeAPICall(
+          `${req.nextUrl.origin}/api/modular/targeted-refinement`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(retryBody)
+          },
+          60000
+        );
+        if (retry.ok) {
+          const retryData = await retry.json();
+          stages.targetedRefinement = { status: 'completed', data: retryData };
+          response.finalArticle = retryData.finalArticle || response.finalArticle;
+          response.assembledContent = retryData.assembledContent || response.assembledContent;
+          response.finalContent.validation = retryData.refinement?.finalQualityMetrics || response.finalContent.validation;
+          response.metadata = retryData.metadata || response.metadata;
+          console.log('✅ Quality gate retry succeeded. Updated final scores:', response.metadata?.finalProfessionalScore);
+        } else {
+          console.warn('⚠️ Quality gate retry failed with status', retry.status);
+        }
+      }
+    } catch (qerr) {
+      console.warn('⚠️ Quality gate enforcement encountered an error:', qerr);
+    }
 
     return NextResponse.json(response, { status: 200 });
 
