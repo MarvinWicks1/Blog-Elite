@@ -1,0 +1,38 @@
+{
+  "testConfiguration": {
+    "primaryKeyword": "artificial intelligence",
+    "topic": "AI in modern business",
+    "targetAudience": "Business professionals and technology enthusiasts",
+    "baseUrl": "http://localhost:3000",
+    "timeout": 120000,
+    "qualityThresholds": {
+      "professionalScore": 8,
+      "authenticityScore": 80,
+      "confidence": 7
+    }
+  },
+  "testResults": {
+    "success": false,
+    "duration": "37ms",
+    "startTime": "2025-09-01T10:02:11.399Z",
+    "endTime": "2025-09-01T10:02:11.436Z",
+    "stages": {},
+    "qualityScores": {},
+    "errors": [
+      {
+        "timestamp": "2025-09-01T10:02:11.436Z",
+        "message": "Pipeline test failed: Request failed: fetch failed"
+      }
+    ],
+    "warnings": [],
+    "finalArticle": null
+  },
+  "summary": {
+    "totalStages": 0,
+    "passedStages": 0,
+    "failedStages": 0,
+    "errorCount": 1,
+    "warningCount": 0,
+    "qualityThresholdsMet": false
+  }
+}
