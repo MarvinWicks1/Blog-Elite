@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
     }
 
     console.log('🚀 Content Pipeline: Starting complete 16-step workflow');
+    console.log('===== PHASE 1: Research & Planning - Validation Start =====');
     console.log('📋 Received data:', { primaryKeyword, topic, targetAudience, hasBrief: !!brief, hasOutline: !!outline });
 
     // Helper function to make API calls with timeout
@@ -189,6 +190,8 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`📊 Pipeline validation passed. Outline has ${pipelineOutline.mainSections.length} main sections`);
+    console.log('✅ PHASE 1 Validation: Brief keys:', Object.keys(pipelineBrief));
+    console.log('✅ PHASE 1 Validation: Outline keys:', Object.keys(pipelineOutline));
 
     // Initialize pipeline stages
     const stages: ContentPipelineResponse['stages'] = {
@@ -369,6 +372,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Stage 5: Assemble Content
+    console.log('===== PHASE 2: Content Assembly - Start =====');
     console.log('🔧 Stage 5: Assembling Content');
     try {
       const assembleResponse = await makeAPICall(
@@ -378,6 +382,7 @@ export async function POST(req: NextRequest) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             outline: pipelineOutline,
+            title: pipelineOutline?.title,
             introduction: stages.introduction.data,
             sections: stages.sections.data,
             faqs: stages.faqs.data,
@@ -393,6 +398,11 @@ export async function POST(req: NextRequest) {
         const assembleData = await assembleResponse.json();
         stages.contentAssembly = { status: 'completed', data: assembleData };
         console.log('✅ Content assembled successfully');
+        // PHASE 2 Validation
+        if (!assembleData.assembledContent || typeof assembleData.assembledContent !== 'string') {
+          throw new Error('PHASE 2 validation failed: assembledContent missing or not a string');
+        }
+        console.log('✅ PHASE 2 Validation: assembledContent length =', assembleData.assembledContent.length);
       } else {
         const errorText = await assembleResponse.text();
         throw new Error(`Content assembly failed: ${assembleResponse.status} - ${errorText}`);
@@ -408,6 +418,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Stage 6: SEO Analysis
+    console.log('===== PHASE 3: SEO Optimization - Analysis Start =====');
     console.log('🔍 Stage 6: Performing SEO Analysis');
     try {
       const seoAnalysisResponse = await makeAPICall(
@@ -428,6 +439,10 @@ export async function POST(req: NextRequest) {
         const seoAnalysisData = await seoAnalysisResponse.json();
         stages.seoAnalysis = { status: 'completed', data: seoAnalysisData };
         console.log('✅ SEO analysis completed successfully');
+        if (typeof seoAnalysisData.seoScore !== 'number') {
+          throw new Error('PHASE 3 validation failed: seoScore not present');
+        }
+        console.log('✅ PHASE 3 Validation (analysis): seoScore =', seoAnalysisData.seoScore);
       } else {
         const errorText = await seoAnalysisResponse.text();
         throw new Error(`SEO analysis failed: ${seoAnalysisResponse.status} - ${errorText}`);
@@ -464,6 +479,11 @@ export async function POST(req: NextRequest) {
         const seoImplementationData = await seoImplementationResponse.json();
         stages.seoImplementation = { status: 'completed', data: seoImplementationData };
         console.log('✅ SEO implementation completed successfully');
+        // PHASE 3 Validation (implementation)
+        if (!seoImplementationData.optimizedContent) {
+          throw new Error('PHASE 3 validation failed: optimizedContent missing');
+        }
+        console.log('✅ PHASE 3 Validation (implementation): optimizedContent length =', seoImplementationData.optimizedContent.length);
       } else {
         const errorText = await seoImplementationResponse.text();
         throw new Error(`SEO implementation failed: ${seoImplementationResponse.status} - ${errorText}`);
@@ -479,6 +499,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Stage 8: Content Humanization
+    console.log('===== PHASE 4: Humanization - Start =====');
     console.log('🤖 Stage 8: Humanizing Content');
     try {
       // Validate that we have the required data from previous stages
@@ -492,7 +513,7 @@ export async function POST(req: NextRequest) {
       }
 
       const humanizationResponse = await makeAPICall(
-        `${req.nextUrl.origin}/api/modular/humanize-content`,
+        `${req.nextUrl.origin}/api/modular/humanization`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -523,8 +544,10 @@ export async function POST(req: NextRequest) {
         console.log('📊 Humanization data validation passed:', {
           hasHumanizedContent: true,
           contentLength: humanizationData.humanizedContent.length,
-          humanizationScore: humanizationData.humanizationScore
+          naturalFlowScore: humanizationData.humanizationMetrics?.naturalFlowScore,
+          sentenceVariety: humanizationData.humanizationMetrics?.sentenceVariety
         });
+        console.log('✅ PHASE 4 Validation: isComplete =', humanizationData.validation?.isComplete, 'maintainsOriginalMeaning =', humanizationData.validation?.maintainsOriginalMeaning);
       } else {
         const errorText = await humanizationResponse.text();
         throw new Error(`Content humanization failed: ${humanizationResponse.status} - ${errorText}`);
@@ -849,6 +872,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Stage 12: Targeted Refinement (FINAL STEP)
+    console.log('===== PHASE 5: Final Polish - Start =====');
     console.log('🎯 Stage 12: Targeted Refinement (Final Step)');
     try {
       // Validate required data before proceeding with targeted refinement
@@ -915,9 +939,90 @@ export async function POST(req: NextRequest) {
       );
 
       if (targetedRefinementResponse.ok) {
-        const targetedRefinementData = await targetedRefinementResponse.json();
+        let targetedRefinementData = await targetedRefinementResponse.json();
         stages.targetedRefinement = { status: 'completed', data: targetedRefinementData };
         console.log('✅ Targeted refinement completed successfully - Article is ready!');
+
+        // Quality Gate: Enforce professional score >= 8/10 with auto-refinement loop (max 2 cycles)
+        const maxCycles = 2;
+        for (let cycle = 0; cycle < maxCycles; cycle++) {
+          // Build refined article for re-review
+          const refinedArticle = targetedRefinementData.refinedArticle || targetedRefinementData.refinement?.refinedArticle;
+          if (!refinedArticle) break;
+
+          const postReviewResponse = await makeAPICall(
+            `${req.nextUrl.origin}/api/modular/professional-critic`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                completeArticle: refinedArticle,
+                userSettings
+              })
+            },
+            30000
+          );
+
+          if (!postReviewResponse.ok) {
+            console.warn('⚠️ Post-refinement professional review failed, skipping quality loop');
+            break;
+          }
+
+          const postReview = await postReviewResponse.json();
+          console.log(`📏 Quality Gate Check (cycle ${cycle + 1}): overallScore =`, postReview.overallScore);
+          if (typeof postReview.overallScore === 'number' && postReview.overallScore >= 8) {
+            console.log('✅ Quality Gate Passed: Final professional score ≥ 8/10');
+            break;
+          }
+
+          // If below threshold, run authenticity review on refined content
+          const refinedAuthResponse = await makeAPICall(
+            `${req.nextUrl.origin}/api/modular/ai-authenticity-review`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                completeArticle: refinedArticle,
+                content: `${refinedArticle.introduction || ''}\n\n${(refinedArticle.sections || []).map((s: any) => s.content).join('\n\n')}\n\n${refinedArticle.conclusion || ''}`,
+                primaryKeyword,
+                userSettings
+              })
+            },
+            30000
+          );
+
+          let refinedAuth = null;
+          if (refinedAuthResponse.ok) {
+            refinedAuth = await refinedAuthResponse.json();
+          } else {
+            console.warn('⚠️ Post-refinement authenticity review failed, proceeding with available feedback only');
+          }
+
+          // Run a new targeted refinement cycle with updated reviews
+          const nextRefinementResponse = await makeAPICall(
+            `${req.nextUrl.origin}/api/modular/targeted-refinement`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                completeArticle: refinedArticle,
+                professionalReview: postReview,
+                authenticityReview: refinedAuth || stages.aiAuthenticityReview.data,
+                userSettings
+              })
+            },
+            60000
+          );
+
+          if (!nextRefinementResponse.ok) {
+            console.warn('⚠️ Additional targeted refinement failed, stopping quality loop');
+            break;
+          }
+
+          targetedRefinementData = await nextRefinementResponse.json();
+          stages.targetedRefinement = { status: 'completed', data: targetedRefinementData };
+          console.log('🔄 Completed refinement cycle, re-checking quality gate...');
+        }
       } else {
         const errorText = await targetedRefinementResponse.text();
         throw new Error(`Targeted refinement failed: ${targetedRefinementResponse.status} - ${errorText}`);
@@ -953,7 +1058,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Pipeline completed successfully!
-    console.log('🎉 Content Pipeline: All 16 stages completed successfully!');
+    console.log('🎉 Content Pipeline: All stages completed successfully!');
 
     // Extract the final article content from the targeted refinement step
     const finalArticleData = stages.targetedRefinement.data;
@@ -970,7 +1075,7 @@ export async function POST(req: NextRequest) {
       pipelineStatus: 'completed',
       stages,
       finalContent: {
-        seoOptimizedContent: finalArticle?.introduction || '',
+        seoOptimizedContent: assembledContent,
         seoMetrics: finalArticleData.finalContent?.seoOptimization || finalArticle?.seoOptimization || {},
         validation: finalArticleData.finalQualityMetrics || finalArticleData.refinement?.finalQualityMetrics || {}
       },
