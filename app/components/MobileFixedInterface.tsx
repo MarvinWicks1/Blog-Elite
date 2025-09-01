@@ -153,6 +153,36 @@ export default function MobileFixedInterface() {
       }
 
       const data = await response.json()
+
+      // If jobId present, connect to SSE for live updates
+      if (data?.jobId) {
+        try {
+          const es = new EventSource(`/api/modular/progress?jobId=${encodeURIComponent(data.jobId)}`)
+          es.onmessage = (evt) => {
+            try {
+              const payload = JSON.parse(evt.data)
+              if (payload?.type === 'stage') {
+                const stage = payload.stage as string
+                setPipelineSteps(steps => steps.map(s => {
+                  if (stage.includes('sections') && s.name.includes('Main Section')) return s
+                  if (s.name.toLowerCase().includes(stage.toLowerCase()) || s.name.toLowerCase().includes(stage.replace(/([A-Z])/g,' $1').toLowerCase())) {
+                    return { ...s, status: payload.status === 'failed' ? 'failed' : payload.status === 'complete' ? 'completed' : 'running', progress: payload.status === 'complete' ? 100 : s.progress || 60 }
+                  }
+                  return s
+                }))
+              } else if (payload?.type === 'progress' && payload.stage === 'sections') {
+                const pct = Math.max(0, Math.min(100, Math.round(payload.progress)))
+                setPipelineSteps(steps => steps.map(s => s.name.includes('Main Section') ? { ...s, status: pct >= 100 ? 'completed' : 'running', progress: pct } : s))
+              } else if (payload?.type === 'done') {
+                es.close()
+              }
+            } catch (_) {}
+          }
+          es.onerror = () => {
+            es.close()
+          }
+        } catch (_) {}
+      }
       
       // Finish progress on success
       stopProgressInterval()
