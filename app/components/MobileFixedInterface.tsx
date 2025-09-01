@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -49,6 +49,42 @@ export default function MobileFixedInterface() {
   const [overallProgress, setOverallProgress] = useState(0)
   const [exportFormat, setExportFormat] = useState<'markdown' | 'html' | 'wordpress'>('markdown')
   const [isExporting, setIsExporting] = useState(false)
+  const progressIntervalRef = useRef<number | null>(null)
+  const currentStepRef = useRef<number>(0)
+
+  const stopProgressInterval = () => {
+    if (progressIntervalRef.current !== null) {
+      clearInterval(progressIntervalRef.current)
+      progressIntervalRef.current = null
+    }
+  }
+
+  const startProgressInterval = () => {
+    currentStepRef.current = 0
+    // Immediately set first step to running
+    setPipelineSteps(steps => steps.map((s, idx) => idx === 0 ? { ...s, status: 'running', progress: 50 } : { ...s, status: 'pending', progress: 0 }))
+    setOverallProgress((1 / PIPELINE_STEPS.length) * 50)
+    // Advance one step approximately every 3s
+    progressIntervalRef.current = window.setInterval(() => {
+      setPipelineSteps(prev => {
+        const next = [...prev]
+        const i = currentStepRef.current
+        if (i < next.length) {
+          // Complete current
+          next[i] = { ...next[i], status: 'completed', progress: 100 }
+        }
+        const nextIndex = Math.min(i + 1, next.length - 1)
+        if (nextIndex !== i && nextIndex < next.length) {
+          next[nextIndex] = { ...next[nextIndex], status: 'running', progress: 60 }
+          currentStepRef.current = nextIndex
+        }
+        const completedCount = next.filter(s => s.status === 'completed').length
+        const runningBonus = next.some(s => s.status === 'running') ? 0.5 : 0
+        setOverallProgress(((completedCount + runningBonus) / PIPELINE_STEPS.length) * 100)
+        return next
+      })
+    }, 3000)
+  }
 
   const handleGenerate = async () => {
     if (!primaryKeyword.trim() || !topic.trim() || !targetAudience.trim()) {
@@ -64,6 +100,8 @@ export default function MobileFixedInterface() {
     setFinalContent(null)
 
     try {
+      // kick off simulated live progress while backend runs
+      startProgressInterval()
       // Pull user settings (including API keys) from localStorage to send to the API
       let userSettings: any = undefined
       try {
@@ -116,28 +154,9 @@ export default function MobileFixedInterface() {
 
       const data = await response.json()
       
-      // Simulate step-by-step progress
-      for (let i = 0; i < pipelineSteps.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
-        setPipelineSteps(steps => 
-          steps.map((step, index) => {
-            if (index === i) {
-              return { ...step, status: 'running', progress: 50 }
-            } else if (index < i) {
-              return { ...step, status: 'completed', progress: 100 }
-            }
-            return step
-          })
-        )
-
-        setOverallProgress(((i + 1) / pipelineSteps.length) * 100)
-      }
-
-      // Complete all steps
-      setPipelineSteps(steps => 
-        steps.map(step => ({ ...step, status: 'completed', progress: 100 }))
-      )
+      // Finish progress on success
+      stopProgressInterval()
+      setPipelineSteps(steps => steps.map(step => ({ ...step, status: 'completed', progress: 100 })))
       setOverallProgress(100)
       
       // Extract the final article content from the API response
@@ -171,6 +190,7 @@ export default function MobileFixedInterface() {
       
     } catch (error) {
       console.error('Generation failed:', error)
+      stopProgressInterval()
       setPipelineSteps(steps => 
         steps.map(step => ({ ...step, status: 'failed', error: error instanceof Error ? error.message : 'Unknown error' }))
       )
