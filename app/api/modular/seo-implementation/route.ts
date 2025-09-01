@@ -6,10 +6,13 @@ export async function POST(req: NextRequest) {
     console.log('⚡ SEO Implementation API - Received body:', JSON.stringify(body, null, 2));
     
     const { content, seoAnalysis, primaryKeyword } = body;
+    const stripHtmlComments = (text: string) => typeof text === 'string' ? text.replace(/<!--[\s\S]*?-->/g, '') : '';
+    const toPlain = (text: any) => typeof text === 'string' ? stripHtmlComments(text).replace(/<[^>]+>/g, '') : '';
     
     // Generate mock SEO implementation
     const mockSeoImplementation = {
-      optimizedContent: content + `\n\n<!-- SEO Optimized Content -->\n<!-- Primary Keyword: ${primaryKeyword} -->\n<!-- Meta Title: ${seoAnalysis?.metaTitle || 'Default Title'} -->\n<!-- Meta Description: ${seoAnalysis?.metaDescription || 'Default Description'} -->`,
+      // Keep optimized content plain to avoid contaminating downstream LLM steps
+      optimizedContent: `${toPlain(content)}`,
       seoScore: 92,
       improvements: [
         'Added meta title and description',

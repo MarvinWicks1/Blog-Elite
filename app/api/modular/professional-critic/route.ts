@@ -212,7 +212,8 @@ EVALUATION CRITERIA:
 
 Be thorough, constructive, and provide specific, actionable feedback. Maintain the high standards expected from a distinguished critic.
 
-RESPOND WITH STRICT JSON ONLY - NO MARKDOWN, NO PROSE, NO EXPLANATIONS OUTSIDE THE JSON STRUCTURE.`;
+RESPOND WITH STRICT JSON ONLY - NO MARKDOWN, NO PROSE, NO EXPLANATIONS OUTSIDE THE JSON STRUCTURE.
+If you cannot provide a complete response, return valid JSON with placeholders, not markdown.`;
 
     // Generate professional review using AI
     // @ts-ignore - aiModel is provider-specific; current provider returns Google Generative Model

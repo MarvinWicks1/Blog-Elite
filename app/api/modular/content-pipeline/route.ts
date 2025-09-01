@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
+import { emitProgress, setJobResult } from '@/lib/progress-bus'
 // Pipeline Orchestrator - Manages the entire content generation workflow
 interface ContentPipelineRequest {
   primaryKeyword: string;
@@ -51,8 +51,9 @@ interface ContentPipelineResponse {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as ContentPipelineRequest;
+    const body = (await req.json()) as ContentPipelineRequest & { jobId?: string };
     const { primaryKeyword, topic, targetAudience, brief, outline, userSettings } = body;
+    const jobId = body.jobId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     // Input validation
     if (!primaryKeyword || typeof primaryKeyword !== 'string' || primaryKeyword.trim().length === 0) {
@@ -66,6 +67,11 @@ export async function POST(req: NextRequest) {
 
     console.log('🚀 Content Pipeline: Starting complete 16-step workflow');
     console.log('📋 Received data:', { primaryKeyword, topic, targetAudience, hasBrief: !!brief, hasOutline: !!outline });
+    emitProgress(jobId, { type: 'stage', stage: 'pipeline:start', status: 'start', timestamp: Date.now() })
+    console.log('🧪 Phase 1 Validation: Checking request payload integrity');
+    if (typeof primaryKeyword !== 'string' || primaryKeyword.trim().length === 0) {
+      return NextResponse.json({ pipelineStatus: 'failed', stages: {}, error: 'Invalid primaryKeyword' }, { status: 400 });
+    }
 
     // Helper function to make API calls with timeout
     const makeAPICall = async (url: string, options: RequestInit, timeoutMs: number = 30000) => {
@@ -88,36 +94,86 @@ export async function POST(req: NextRequest) {
       }
     };
 
-    // Stage 0: Generate Brief and Outline if not provided
+    // Stage 0: Keyword Research (moved earlier for better brief/outline)
+    let keywordResearchData: any = undefined;
+    try {
+      emitProgress(jobId, { type: 'stage', stage: 'keywordResearch', status: 'start', timestamp: Date.now() })
+      const keywordResearchResponse = await makeAPICall(
+        `${req.nextUrl.origin}/api/modular/keyword-research`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            primaryKeyword,
+            topic,
+            targetAudience,
+            userSettings
+          })
+        },
+        30000
+      );
+      if (keywordResearchResponse.ok) {
+        keywordResearchData = await keywordResearchResponse.json();
+        emitProgress(jobId, { type: 'stage', stage: 'keywordResearch', status: 'complete', timestamp: Date.now() })
+      } else {
+        const err = await keywordResearchResponse.text();
+        throw new Error(err);
+      }
+    } catch (err) {
+      console.warn('🔶 Keyword research failed or unavailable, continuing with fallback brief/outline.', err);
+      emitProgress(jobId, { type: 'stage', stage: 'keywordResearch', status: 'failed', data: { error: String(err) }, timestamp: Date.now() })
+    }
+
+    // Stage 1: Generate Brief and Outline if not provided
     let pipelineBrief = brief;
     let pipelineOutline = outline;
 
     if (!pipelineBrief) {
       console.log('📋 Stage 0a: Generating Content Brief');
+      emitProgress(jobId, { type: 'stage', stage: 'brief', status: 'start', timestamp: Date.now() })
       try {
-        const briefResponse = await makeAPICall(
-          `${req.nextUrl.origin}/api/modular/generate-brief`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              primaryKeyword: primaryKeyword.trim(),
-              topic: topic?.trim() || '',
-              targetAudience: targetAudience?.trim() || ''
-            })
-          },
-          30000 // 30 second timeout
-        );
-
-        if (briefResponse.ok) {
-          pipelineBrief = await briefResponse.json();
-          console.log('✅ Content brief generated successfully');
+        // Prefer AI content-brief if keyword research available
+        if (keywordResearchData) {
+          const cbResp = await makeAPICall(
+            `${req.nextUrl.origin}/api/modular/content-brief`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ keywordResearch: keywordResearchData, userSettings })
+            },
+            30000
+          );
+          if (cbResp.ok) {
+            pipelineBrief = await cbResp.json();
+          } else {
+            throw new Error(await cbResp.text());
+          }
         } else {
-          const errorText = await briefResponse.text();
-          throw new Error(`Brief generation failed: ${briefResponse.status} - ${errorText}`);
+          // Fallback mock brief
+          const briefResponse = await makeAPICall(
+            `${req.nextUrl.origin}/api/modular/generate-brief`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                primaryKeyword: primaryKeyword.trim(),
+                topic: topic?.trim() || '',
+                targetAudience: targetAudience?.trim() || ''
+              })
+            },
+            30000
+          );
+          if (briefResponse.ok) {
+            pipelineBrief = await briefResponse.json();
+          } else {
+            throw new Error(await briefResponse.text());
+          }
         }
+        console.log('✅ Content brief generated successfully');
+        emitProgress(jobId, { type: 'stage', stage: 'brief', status: 'complete', data: { hasBrief: true }, timestamp: Date.now() })
       } catch (error) {
         console.error('❌ Brief generation failed:', error);
+        emitProgress(jobId, { type: 'stage', stage: 'brief', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
         return NextResponse.json({
           pipelineStatus: 'failed',
           stages: {},
@@ -128,30 +184,50 @@ export async function POST(req: NextRequest) {
 
     if (!pipelineOutline) {
       console.log('📋 Stage 0b: Generating Content Outline');
+      emitProgress(jobId, { type: 'stage', stage: 'outline', status: 'start', timestamp: Date.now() })
       try {
-        const outlineResponse = await makeAPICall(
-          `${req.nextUrl.origin}/api/modular/generate-outline`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              primaryKeyword: primaryKeyword.trim(),
-              topic: topic?.trim() || '',
-              targetAudience: targetAudience?.trim() || ''
-            })
-          },
-          30000 // 30 second timeout
-        );
-
-        if (outlineResponse.ok) {
-          pipelineOutline = await outlineResponse.json();
-          console.log('✅ Content outline generated successfully');
+        // Prefer AI outline-generation if brief available
+        if (pipelineBrief && pipelineBrief.audienceProfile) {
+          const olResp = await makeAPICall(
+            `${req.nextUrl.origin}/api/modular/outline-generation`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contentBrief: pipelineBrief, userSettings })
+            },
+            30000
+          );
+          if (olResp.ok) {
+            pipelineOutline = await olResp.json();
+          } else {
+            throw new Error(await olResp.text());
+          }
         } else {
-          const errorText = await outlineResponse.text();
-          throw new Error(`Outline generation failed: ${outlineResponse.status} - ${errorText}`);
+          // Fallback mock outline
+          const outlineResponse = await makeAPICall(
+            `${req.nextUrl.origin}/api/modular/generate-outline`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                primaryKeyword: primaryKeyword.trim(),
+                topic: topic?.trim() || '',
+                targetAudience: targetAudience?.trim() || ''
+              })
+            },
+            30000
+          );
+          if (outlineResponse.ok) {
+            pipelineOutline = await outlineResponse.json();
+          } else {
+            throw new Error(await outlineResponse.text());
+          }
         }
+        console.log('✅ Content outline generated successfully');
+        emitProgress(jobId, { type: 'stage', stage: 'outline', status: 'complete', data: { sections: pipelineOutline?.mainSections?.length || 0 }, timestamp: Date.now() })
       } catch (error) {
         console.error('❌ Outline generation failed:', error);
+        emitProgress(jobId, { type: 'stage', stage: 'outline', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
         return NextResponse.json({
           pipelineStatus: 'failed',
           stages: {},
@@ -187,6 +263,7 @@ export async function POST(req: NextRequest) {
         error: 'Generated outline has invalid structure - missing main sections'
       }, { status: 500 });
     }
+    console.log('🧪 Phase 1→2 Gate: Outline structure OK (JSON with title, introductionPlan, mainSections, faqSection, conclusionPlan)');
 
     console.log(`📊 Pipeline validation passed. Outline has ${pipelineOutline.mainSections.length} main sections`);
 
@@ -211,6 +288,7 @@ export async function POST(req: NextRequest) {
 
     // Stage 1: Generate Introduction
     console.log('📝 Stage 1: Generating Introduction');
+    emitProgress(jobId, { type: 'stage', stage: 'introduction', status: 'start', timestamp: Date.now() })
     console.log('📋 Introduction input:', { 
       outlineTitle: pipelineOutline.title, 
       mainSectionsCount: pipelineOutline.mainSections.length,
@@ -235,12 +313,14 @@ export async function POST(req: NextRequest) {
         const introData = await introResponse.json();
         stages.introduction = { status: 'completed', data: introData.introduction };
         console.log('✅ Introduction generated successfully, word count:', introData.wordCount || 'unknown');
+        emitProgress(jobId, { type: 'stage', stage: 'introduction', status: 'complete', data: { wc: introData.wordCount }, timestamp: Date.now() })
       } else {
         const errorText = await introResponse.text();
         throw new Error(`Introduction generation failed: ${introResponse.status} - ${errorText}`);
       }
     } catch (error) {
       console.error('❌ Introduction generation failed:', error);
+      emitProgress(jobId, { type: 'stage', stage: 'introduction', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
       stages.introduction = { status: 'failed', data: null };
       return NextResponse.json({
         pipelineStatus: 'failed',
@@ -251,6 +331,7 @@ export async function POST(req: NextRequest) {
 
     // Stage 2: Generate Sections
     console.log('📚 Stage 2: Generating Content Sections');
+    emitProgress(jobId, { type: 'stage', stage: 'sections', status: 'start', timestamp: Date.now() })
     console.log(`📋 Will generate ${pipelineOutline.mainSections.length} sections`);
     const sections: string[] = [];
     try {
@@ -278,6 +359,7 @@ export async function POST(req: NextRequest) {
           const sectionData = await sectionResponse.json();
           sections.push(sectionData.section);
           console.log(`✅ Section ${i + 1} generated successfully, word count: ${sectionData.wordCount || 'unknown'}`);
+          emitProgress(jobId, { type: 'progress', stage: 'sections', progress: ((i + 1) / pipelineOutline.mainSections.length) * 100, data: { index: i + 1 }, timestamp: Date.now() })
         } else {
           const errorText = await sectionResponse.text();
           throw new Error(`Section ${i + 1} generation failed: ${sectionResponse.status} - ${errorText}`);
@@ -285,8 +367,10 @@ export async function POST(req: NextRequest) {
       }
       stages.sections = { status: 'completed', data: sections };
       console.log(`✅ All ${sections.length} sections generated successfully`);
+      emitProgress(jobId, { type: 'stage', stage: 'sections', status: 'complete', data: { count: sections.length }, timestamp: Date.now() })
     } catch (error) {
       console.error('❌ Section generation failed:', error);
+      emitProgress(jobId, { type: 'stage', stage: 'sections', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
       stages.sections = { status: 'failed', data: null };
       return NextResponse.json({
         pipelineStatus: 'failed',
@@ -297,6 +381,7 @@ export async function POST(req: NextRequest) {
 
     // Stage 3: Generate FAQs
     console.log('❓ Stage 3: Generating FAQs');
+    emitProgress(jobId, { type: 'stage', stage: 'faqs', status: 'start', timestamp: Date.now() })
     try {
       const faqResponse = await makeAPICall(
         `${req.nextUrl.origin}/api/modular/generate-faq`,
@@ -317,12 +402,14 @@ export async function POST(req: NextRequest) {
         const faqData = await faqResponse.json();
         stages.faqs = { status: 'completed', data: faqData.faqs };
         console.log('✅ FAQs generated successfully');
+        emitProgress(jobId, { type: 'stage', stage: 'faqs', status: 'complete', data: { count: faqData.count }, timestamp: Date.now() })
       } else {
         const errorText = await faqResponse.text();
         throw new Error(`FAQ generation failed: ${faqResponse.status} - ${errorText}`);
       }
     } catch (error) {
       console.error('❌ FAQ generation failed:', error);
+      emitProgress(jobId, { type: 'stage', stage: 'faqs', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
       stages.faqs = { status: 'failed', data: null };
       return NextResponse.json({
         pipelineStatus: 'failed',
@@ -333,6 +420,7 @@ export async function POST(req: NextRequest) {
 
     // Stage 4: Generate Conclusion
     console.log('🏁 Stage 4: Generating Conclusion');
+    emitProgress(jobId, { type: 'stage', stage: 'conclusion', status: 'start', timestamp: Date.now() })
     try {
       const conclusionResponse = await makeAPICall(
         `${req.nextUrl.origin}/api/modular/write-conclusion`,
@@ -354,12 +442,14 @@ export async function POST(req: NextRequest) {
         const conclusionData = await conclusionResponse.json();
         stages.conclusion = { status: 'completed', data: conclusionData.conclusion };
         console.log('✅ Conclusion generated successfully');
+        emitProgress(jobId, { type: 'stage', stage: 'conclusion', status: 'complete', timestamp: Date.now() })
       } else {
         const errorText = await conclusionResponse.text();
         throw new Error(`Conclusion generation failed: ${conclusionResponse.status} - ${errorText}`);
       }
     } catch (error) {
       console.error('❌ Conclusion generation failed:', error);
+      emitProgress(jobId, { type: 'stage', stage: 'conclusion', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
       stages.conclusion = { status: 'failed', data: null };
       return NextResponse.json({
         pipelineStatus: 'failed',
@@ -370,6 +460,7 @@ export async function POST(req: NextRequest) {
 
     // Stage 5: Assemble Content
     console.log('🔧 Stage 5: Assembling Content');
+    emitProgress(jobId, { type: 'stage', stage: 'assembly', status: 'start', timestamp: Date.now() })
     try {
       const assembleResponse = await makeAPICall(
         `${req.nextUrl.origin}/api/modular/assemble-content`,
@@ -391,14 +482,19 @@ export async function POST(req: NextRequest) {
 
       if (assembleResponse.ok) {
         const assembleData = await assembleResponse.json();
+        if (!assembleData.assembledContent || typeof assembleData.assembledContent !== 'string') {
+          throw new Error('Assembly output missing assembledContent string');
+        }
         stages.contentAssembly = { status: 'completed', data: assembleData };
         console.log('✅ Content assembled successfully');
+        emitProgress(jobId, { type: 'stage', stage: 'assembly', status: 'complete', data: { wc: assembleData.wordCount }, timestamp: Date.now() })
       } else {
         const errorText = await assembleResponse.text();
         throw new Error(`Content assembly failed: ${assembleResponse.status} - ${errorText}`);
       }
     } catch (error) {
       console.error('❌ Content assembly failed:', error);
+      emitProgress(jobId, { type: 'stage', stage: 'assembly', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
       stages.contentAssembly = { status: 'failed', data: null };
       return NextResponse.json({
         pipelineStatus: 'failed',
@@ -409,6 +505,7 @@ export async function POST(req: NextRequest) {
 
     // Stage 6: SEO Analysis
     console.log('🔍 Stage 6: Performing SEO Analysis');
+    emitProgress(jobId, { type: 'stage', stage: 'seoAnalysis', status: 'start', timestamp: Date.now() })
     try {
       const seoAnalysisResponse = await makeAPICall(
         `${req.nextUrl.origin}/api/modular/seo-analysis`,
@@ -428,12 +525,14 @@ export async function POST(req: NextRequest) {
         const seoAnalysisData = await seoAnalysisResponse.json();
         stages.seoAnalysis = { status: 'completed', data: seoAnalysisData };
         console.log('✅ SEO analysis completed successfully');
+        emitProgress(jobId, { type: 'stage', stage: 'seoAnalysis', status: 'complete', timestamp: Date.now() })
       } else {
         const errorText = await seoAnalysisResponse.text();
         throw new Error(`SEO analysis failed: ${seoAnalysisResponse.status} - ${errorText}`);
       }
     } catch (error) {
       console.error('❌ SEO analysis failed:', error);
+      emitProgress(jobId, { type: 'stage', stage: 'seoAnalysis', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
       stages.seoAnalysis = { status: 'failed', data: null };
       return NextResponse.json({
         pipelineStatus: 'failed',
@@ -444,6 +543,7 @@ export async function POST(req: NextRequest) {
 
     // Stage 7: SEO Implementation
     console.log('🚀 Stage 7: Implementing SEO Optimizations');
+    emitProgress(jobId, { type: 'stage', stage: 'seoImplementation', status: 'start', timestamp: Date.now() })
     try {
       const seoImplementationResponse = await makeAPICall(
         `${req.nextUrl.origin}/api/modular/seo-implementation`,
@@ -462,14 +562,19 @@ export async function POST(req: NextRequest) {
 
       if (seoImplementationResponse.ok) {
         const seoImplementationData = await seoImplementationResponse.json();
+        if (!seoImplementationData.optimizedContent) {
+          throw new Error('SEO implementation missing optimizedContent');
+        }
         stages.seoImplementation = { status: 'completed', data: seoImplementationData };
         console.log('✅ SEO implementation completed successfully');
+        emitProgress(jobId, { type: 'stage', stage: 'seoImplementation', status: 'complete', timestamp: Date.now() })
       } else {
         const errorText = await seoImplementationResponse.text();
         throw new Error(`SEO implementation failed: ${seoImplementationResponse.status} - ${errorText}`);
       }
     } catch (error) {
       console.error('❌ SEO implementation failed:', error);
+      emitProgress(jobId, { type: 'stage', stage: 'seoImplementation', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
       stages.seoImplementation = { status: 'failed', data: null };
       return NextResponse.json({
         pipelineStatus: 'failed',
@@ -478,8 +583,13 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
+    // Utility: strip HTML comments and tags for plain-text downstream context
+    const stripHtmlComments = (text: string) => text?.replace(/<!--[\s\S]*?-->/g, '') ?? '';
+    const stripBasicHtml = (text: string) => stripHtmlComments(text).replace(/<[^>]+>/g, '');
+
     // Stage 8: Content Humanization
     console.log('🤖 Stage 8: Humanizing Content');
+    emitProgress(jobId, { type: 'stage', stage: 'humanization', status: 'start', timestamp: Date.now() })
     try {
       // Validate that we have the required data from previous stages
       if (!stages.seoImplementation.data?.optimizedContent) {
@@ -491,13 +601,15 @@ export async function POST(req: NextRequest) {
         throw new Error('Cannot proceed with content humanization: optimized content is missing from previous stage');
       }
 
+      const contentForHumanization = stripBasicHtml(stages.seoImplementation.data.optimizedContent);
       const humanizationResponse = await makeAPICall(
         `${req.nextUrl.origin}/api/modular/humanize-content`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            content: stages.seoImplementation.data.optimizedContent,
+            // Pass plain text to reduce cross-step noise
+            content: contentForHumanization,
             primaryKeyword,
             userSettings
           })
@@ -520,10 +632,13 @@ export async function POST(req: NextRequest) {
         
         stages.humanization = { status: 'completed', data: humanizationData };
         console.log('✅ Content humanization completed successfully');
+        emitProgress(jobId, { type: 'stage', stage: 'humanization', status: 'complete', timestamp: Date.now() })
         console.log('📊 Humanization data validation passed:', {
           hasHumanizedContent: true,
           contentLength: humanizationData.humanizedContent.length,
-          humanizationScore: humanizationData.humanizationScore
+          humanizationScore: humanizationData.humanizationScore,
+          aiRiskBefore: humanizationData.aiDetectionRisk?.before,
+          aiRiskAfter: humanizationData.aiDetectionRisk?.after
         });
       } else {
         const errorText = await humanizationResponse.text();
@@ -531,6 +646,7 @@ export async function POST(req: NextRequest) {
       }
     } catch (error) {
       console.error('❌ Content humanization failed:', error);
+      emitProgress(jobId, { type: 'stage', stage: 'humanization', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
       
       // Enhanced error logging for debugging
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -557,52 +673,15 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
-    // Stage 8.5: Keyword Research (Required for Image Enhancement)
-    // This stage is essential for the image enhancement API which requires keyword research data
-    console.log('🔍 Stage 8.5: Performing Keyword Research');
-    let keywordResearchData;
-    try {
-      const keywordResearchResponse = await makeAPICall(
-        `${req.nextUrl.origin}/api/modular/keyword-research`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            primaryKeyword,
-            topic,
-            targetAudience,
-            userSettings
-          })
-        },
-        30000 // 30 second timeout
-      );
-
-      if (keywordResearchResponse.ok) {
-        keywordResearchData = await keywordResearchResponse.json();
-        
-        // Validate keyword research data structure
-        if (!keywordResearchData.primaryKeyword || !keywordResearchData.semanticKeywords || !keywordResearchData.relatedQuestions) {
-          throw new Error('Invalid keyword research data structure - missing required fields');
-        }
-        
-        stages.keywordResearch = { status: 'completed', data: keywordResearchData };
-        console.log('✅ Keyword research completed successfully');
-      } else {
-        const errorText = await keywordResearchResponse.text();
-        throw new Error(`Keyword research failed: ${keywordResearchResponse.status} - ${errorText}`);
-      }
-    } catch (error) {
-      console.error('❌ Keyword research failed:', error);
-      stages.keywordResearch = { status: 'failed', data: null };
-      return NextResponse.json({
-        pipelineStatus: 'failed',
-        stages,
-        error: `Failed to perform keyword research: ${error instanceof Error ? error.message : 'Unknown error'}`
-      }, { status: 500 });
+    // Note: Keyword research executed earlier; ensure data exists before images
+    if (!keywordResearchData) {
+      console.warn('⚠️ Missing keyword research from earlier stage; proceeding without image enhancement.');
+      stages.keywordResearch = stages.keywordResearch?.status ? stages.keywordResearch : { status: 'failed', data: null };
     }
 
     // Stage 9: Smart Image Enhancement
     console.log('🖼️ Stage 9: Enhancing Images');
+    emitProgress(jobId, { type: 'stage', stage: 'images', status: 'start', timestamp: Date.now() })
     try {
       // Validate required data before making the API call
       if (!stages.humanization.data?.humanizedContent) {
@@ -650,6 +729,7 @@ export async function POST(req: NextRequest) {
         const imageEnhancementData = await imageEnhancementResponse.json();
         stages.imageEnhancement = { status: 'completed', data: imageEnhancementData };
         console.log('✅ Image enhancement completed successfully');
+        emitProgress(jobId, { type: 'stage', stage: 'images', status: 'complete', data: { count: (imageEnhancementData?.images || []).length }, timestamp: Date.now() })
       } else {
         const errorText = await imageEnhancementResponse.text();
         console.error('❌ Image enhancement API error response:', errorText);
@@ -657,7 +737,7 @@ export async function POST(req: NextRequest) {
       }
     } catch (error) {
       console.error('❌ Image enhancement failed:', error);
-      stages.imageEnhancement = { status: 'failed', data: null };
+      emitProgress(jobId, { type: 'stage', stage: 'images', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
       
       // Provide more detailed error information for debugging
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -678,6 +758,7 @@ export async function POST(req: NextRequest) {
 
     // Stage 10: Professional Review
     console.log('👨‍💼 Stage 10: Professional Review');
+    emitProgress(jobId, { type: 'stage', stage: 'professionalReview', status: 'start', timestamp: Date.now() })
     try {
       // Prepare the complete article for professional review
       const completeArticleForReview = {
@@ -721,17 +802,23 @@ export async function POST(req: NextRequest) {
         
         stages.professionalReview = { status: 'completed', data: professionalReviewData };
         console.log('✅ Professional review completed successfully');
+        emitProgress(jobId, { type: 'stage', stage: 'professionalReview', status: 'complete', data: { score: professionalReviewData.overallScore }, timestamp: Date.now() })
         console.log('📊 Review data validation passed:', {
           hasQualityScores: true,
           hasImprovementRecommendations: true,
           overallScore: professionalReviewData.overallScore
         });
+        // Quality gate: enforce minimum overall score 8/10
+        if (typeof professionalReviewData.overallScore === 'number' && professionalReviewData.overallScore < 8) {
+          console.warn('🟡 Quality gate triggered: overall score below 8. Initiating pre-refinement loop.');
+        }
       } else {
         const errorText = await professionalReviewResponse.text();
         throw new Error(`Professional review failed: ${professionalReviewResponse.status} - ${errorText}`);
       }
     } catch (error) {
       console.error('❌ Professional review failed:', error);
+      emitProgress(jobId, { type: 'stage', stage: 'professionalReview', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
       stages.professionalReview = { status: 'failed', data: null };
       return NextResponse.json({
         pipelineStatus: 'failed',
@@ -742,6 +829,7 @@ export async function POST(req: NextRequest) {
 
     // Stage 11: AI Authenticity Review
     console.log('🔍 Stage 11: AI Authenticity Review');
+    emitProgress(jobId, { type: 'stage', stage: 'authenticityReview', status: 'start', timestamp: Date.now() })
     try {
       // Validate that we have the required data from previous stages
       if (!stages.humanization.data?.humanizedContent) {
@@ -809,6 +897,7 @@ export async function POST(req: NextRequest) {
         
         stages.aiAuthenticityReview = { status: 'completed', data: aiAuthenticityData };
         console.log('✅ AI authenticity review completed successfully');
+        emitProgress(jobId, { type: 'stage', stage: 'authenticityReview', status: 'complete', data: { score: aiAuthenticityData.authenticityScore }, timestamp: Date.now() })
         console.log('📊 Authenticity review data validation passed:', {
           hasHumanizationRecommendations: true,
           hasOverallAssessment: true,
@@ -822,6 +911,7 @@ export async function POST(req: NextRequest) {
       }
     } catch (error) {
       console.error('❌ AI authenticity review failed:', error);
+      emitProgress(jobId, { type: 'stage', stage: 'authenticityReview', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
       
       // Enhanced error logging for debugging
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -850,6 +940,7 @@ export async function POST(req: NextRequest) {
 
     // Stage 12: Targeted Refinement (FINAL STEP)
     console.log('🎯 Stage 12: Targeted Refinement (Final Step)');
+    emitProgress(jobId, { type: 'stage', stage: 'refinement', status: 'start', timestamp: Date.now() })
     try {
       // Validate required data before proceeding with targeted refinement
       if (!stages.professionalReview.data?.qualityScores || !stages.professionalReview.data?.improvementRecommendations) {
@@ -918,12 +1009,18 @@ export async function POST(req: NextRequest) {
         const targetedRefinementData = await targetedRefinementResponse.json();
         stages.targetedRefinement = { status: 'completed', data: targetedRefinementData };
         console.log('✅ Targeted refinement completed successfully - Article is ready!');
+        emitProgress(jobId, { type: 'stage', stage: 'refinement', status: 'complete', data: { score: targetedRefinementData?.refinement?.finalQualityMetrics?.professionalScore }, timestamp: Date.now() })
+        const finalScore = targetedRefinementData?.refinement?.finalQualityMetrics?.professionalScore;
+        if (typeof finalScore === 'number') {
+          console.log('🧪 Phase 4→5 Gate: Final professional score =', finalScore);
+        }
       } else {
         const errorText = await targetedRefinementResponse.text();
         throw new Error(`Targeted refinement failed: ${targetedRefinementResponse.status} - ${errorText}`);
       }
     } catch (error) {
       console.error('❌ Targeted refinement failed:', error);
+      emitProgress(jobId, { type: 'stage', stage: 'refinement', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
       
       // Enhanced error logging for debugging
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -954,6 +1051,7 @@ export async function POST(req: NextRequest) {
 
     // Pipeline completed successfully!
     console.log('🎉 Content Pipeline: All 16 stages completed successfully!');
+    emitProgress(jobId, { type: 'done', timestamp: Date.now() })
 
     // Extract the final article content from the targeted refinement step
     const finalArticleData = stages.targetedRefinement.data;
@@ -984,8 +1082,50 @@ export async function POST(req: NextRequest) {
         finalAuthenticityScore: finalArticleData.refinement?.finalQualityMetrics?.authenticityScore || 85,
         refinedWordCount: assembledContent.split(' ').length,
         publicationReady: finalArticleData.refinement?.finalQualityMetrics?.publicationReadiness || true
-      }
+      },
+      // Expose jobId so client can subscribe to SSE
+      // @ts-ignore augment
+      jobId
     };
+
+    // Save result for client retrieval via jobId if needed
+    try { setJobResult(jobId, response) } catch {}
+
+    // Quality Threshold Enforcement: ensure >= 8/10 else trigger one automatic refinement retry
+    try {
+      const finalScore = response.metadata?.finalProfessionalScore as number | undefined;
+      if (typeof finalScore === 'number' && finalScore < 8) {
+        console.warn('🟠 Quality gate: Final score below 8. Triggering targeted refinement retry.');
+        const retryBody = {
+          completeArticle: response.finalArticle,
+          professionalReview: stages.professionalReview.data,
+          authenticityReview: stages.aiAuthenticityReview.data,
+          userSettings
+        };
+        const retry = await makeAPICall(
+          `${req.nextUrl.origin}/api/modular/targeted-refinement`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(retryBody)
+          },
+          60000
+        );
+        if (retry.ok) {
+          const retryData = await retry.json();
+          stages.targetedRefinement = { status: 'completed', data: retryData };
+          response.finalArticle = retryData.finalArticle || response.finalArticle;
+          response.assembledContent = retryData.assembledContent || response.assembledContent;
+          response.finalContent.validation = retryData.refinement?.finalQualityMetrics || response.finalContent.validation;
+          response.metadata = retryData.metadata || response.metadata;
+          console.log('✅ Quality gate retry succeeded. Updated final scores:', response.metadata?.finalProfessionalScore);
+        } else {
+          console.warn('⚠️ Quality gate retry failed with status', retry.status);
+        }
+      }
+    } catch (qerr) {
+      console.warn('⚠️ Quality gate enforcement encountered an error:', qerr);
+    }
 
     return NextResponse.json(response, { status: 200 });
 

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -49,6 +49,7 @@ export default function MobileFixedInterface() {
   const [overallProgress, setOverallProgress] = useState(0)
   const [exportFormat, setExportFormat] = useState<'markdown' | 'html' | 'wordpress'>('markdown')
   const [isExporting, setIsExporting] = useState(false)
+  const sseRef = useRef<EventSource | null>(null)
 
   const handleGenerate = async () => {
     if (!primaryKeyword.trim() || !topic.trim() || !targetAudience.trim()) {
@@ -64,6 +65,90 @@ export default function MobileFixedInterface() {
     setFinalContent(null)
 
     try {
+      // Pull user settings (including API keys) from localStorage to send to the API
+      let userSettings: any = undefined
+      try {
+        const local = localStorage.getItem('blog-elite-settings')
+        if (local) {
+          const parsed = JSON.parse(local)
+          const provider = parsed?.aiProviders?.google?.enabled
+            ? 'google'
+            : parsed?.aiProviders?.openai?.enabled
+            ? 'openai'
+            : parsed?.aiProviders?.anthropic?.enabled
+            ? 'anthropic'
+            : 'google'
+          const model =
+            provider === 'google'
+              ? (parsed?.aiProviders?.google?.model || 'gemini-1.5-pro')
+              : provider === 'openai'
+              ? (parsed?.aiProviders?.openai?.model || 'gpt-4')
+              : (parsed?.aiProviders?.anthropic?.model || 'claude-3-sonnet-20240229')
+          userSettings = {
+            aiSettings: {
+              selectedProvider: provider,
+              selectedModel: model,
+              apiKeys: {
+                google: parsed?.aiProviders?.google?.apiKey || undefined,
+              },
+            },
+          }
+        }
+      } catch (_) {
+        // ignore settings parse errors
+      }
+
+      // Create jobId and open SSE before POST
+      const jobId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+      try {
+        const es = new EventSource(`/api/modular/progress?jobId=${encodeURIComponent(jobId)}`)
+        sseRef.current = es
+        es.onmessage = (evt) => {
+          try {
+            const payload = JSON.parse(evt.data)
+            if (payload?.type === 'stage') {
+              const mapStageToName = (st: string) => {
+                switch (st) {
+                  case 'keywordResearch': return 'Expert Keyword Research'
+                  case 'brief': return 'Strategic Content Brief'
+                  case 'outline': return 'Comprehensive Outline'
+                  case 'introduction': return 'Engaging Introduction'
+                  case 'sections': return 'Main Section Writing'
+                  case 'faqs': return 'FAQ Generation'
+                  case 'conclusion': return 'Compelling Conclusion'
+                  case 'assembly': return 'Content Assembly'
+                  case 'seoAnalysis': return 'SEO Analysis'
+                  case 'seoImplementation': return 'SEO Implementation'
+                  case 'humanization': return 'Content Humanization'
+                  case 'images': return 'Smart Image Enhancement'
+                  case 'professionalReview': return 'Professional Review'
+                  case 'authenticityReview': return 'AI Authenticity Review'
+                  case 'refinement': return 'Targeted Refinement'
+                  default: return st
+                }
+              }
+              const stageName = mapStageToName(payload.stage)
+              setPipelineSteps(steps => steps.map(s => {
+                if (s.name === stageName) {
+                  const status = payload.status === 'failed' ? 'failed' : payload.status === 'complete' ? 'completed' : 'running'
+                  const progress = status === 'completed' ? 100 : s.progress || 60
+                  return { ...s, status, progress }
+                }
+                return s
+              }))
+            } else if (payload?.type === 'progress' && payload.stage === 'sections') {
+              const pct = Math.max(0, Math.min(100, Math.round(payload.progress)))
+              setPipelineSteps(steps => steps.map(s => s.name.includes('Main Section') ? { ...s, status: pct >= 100 ? 'completed' : 'running', progress: pct } : s))
+            } else if (payload?.type === 'done') {
+              setPipelineSteps(steps => steps.map(step => ({ ...step, status: 'completed', progress: 100 })))
+              setOverallProgress(100)
+              try { es.close() } catch {}
+            }
+          } catch (_) {}
+        }
+        es.onerror = () => { try { sseRef.current?.close() } catch {} }
+      } catch (_) {}
+
       const response = await fetch('/api/modular/content-pipeline', {
         method: 'POST',
         headers: {
@@ -73,6 +158,8 @@ export default function MobileFixedInterface() {
           primaryKeyword: primaryKeyword.trim(),
           topic: topic.trim(),
           targetAudience: targetAudience.trim(),
+          userSettings,
+          jobId,
         }),
       })
 
@@ -81,33 +168,8 @@ export default function MobileFixedInterface() {
       }
 
       const data = await response.json()
-      
-      // Simulate step-by-step progress
-      for (let i = 0; i < pipelineSteps.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
-        setPipelineSteps(steps => 
-          steps.map((step, index) => {
-            if (index === i) {
-              return { ...step, status: 'running', progress: 50 }
-            } else if (index < i) {
-              return { ...step, status: 'completed', progress: 100 }
-            }
-            return step
-          })
-        )
 
-        setOverallProgress(((i + 1) / pipelineSteps.length) * 100)
-      }
-
-      // Complete all steps
-      setPipelineSteps(steps => 
-        steps.map(step => ({ ...step, status: 'completed', progress: 100 }))
-      )
-      setOverallProgress(100)
-      
       // Extract the final article content from the API response
-      // The targeted refinement step returns the complete final article
       const finalArticle = data.finalArticle || data.stages?.targetedRefinement?.data?.finalArticle || data.stages?.targetedRefinement?.data?.refinement?.refinedArticle;
       const assembledContent = data.assembledContent || data.stages?.targetedRefinement?.data?.assembledContent || 
         (finalArticle ? 
@@ -125,11 +187,9 @@ export default function MobileFixedInterface() {
         faq: finalArticle?.faq || [],
         seoOptimization: finalArticle?.seoOptimization || {},
         images: finalArticle?.images || [],
-        // Quality metrics from the final refinement step
         qualityScore: data.metadata?.finalProfessionalScore || data.stages?.targetedRefinement?.data?.metadata?.finalProfessionalScore || data.stages?.targetedRefinement?.data?.refinement?.finalQualityMetrics?.professionalScore || 8.5,
         wordCount: data.metadata?.refinedWordCount || data.stages?.targetedRefinement?.data?.metadata?.refinedWordCount || assembledContent.split(' ').length || 2500,
         seoScore: data.metadata?.finalAuthenticityScore || data.stages?.targetedRefinement?.data?.metadata?.finalAuthenticityScore || data.stages?.targetedRefinement?.data?.refinement?.finalQualityMetrics?.authenticityScore || 85,
-        // Raw data for debugging
         rawData: data
       };
       
@@ -137,6 +197,7 @@ export default function MobileFixedInterface() {
       
     } catch (error) {
       console.error('Generation failed:', error)
+      try { sseRef.current?.close() } catch {}
       setPipelineSteps(steps => 
         steps.map(step => ({ ...step, status: 'failed', error: error instanceof Error ? error.message : 'Unknown error' }))
       )
@@ -518,6 +579,22 @@ export default function MobileFixedInterface() {
                       <strong className="text-blue-700">Complete Article:</strong>
                       <div className="mt-2 text-xs text-gray-600">
                         {finalContent.assembledContent.substring(0, 200)}...
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Images Preview */}
+                  {finalContent.images && finalContent.images.length > 0 && (
+                    <div className="mt-4">
+                      <strong className="text-blue-700">Images:</strong>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
+                        {finalContent.images.slice(0, 6).map((img: any, idx: number) => (
+                          <figure key={idx} className="bg-white rounded border p-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={img.thumbnailUrl || img.unsplashUrl || img.downloadUrl || img.url} alt={img.altText || img.description || 'image'} className="w-full h-32 object-cover rounded" />
+                            <figcaption className="mt-1 text-xs text-gray-600 line-clamp-2">{img.caption || img.description}</figcaption>
+                          </figure>
+                        ))}
                       </div>
                     </div>
                   )}

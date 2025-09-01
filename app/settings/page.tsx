@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Save, Key, Brain, Gauge, Globe, Mail, Download, CheckCircle, AlertCircle } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 interface Settings {
   aiProviders: {
@@ -87,6 +88,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     // Load settings from localStorage or API
@@ -98,6 +100,7 @@ export default function SettingsPage() {
         console.error('Failed to parse saved settings:', error)
       }
     }
+    setMounted(true)
   }, [])
 
   const handleSave = async () => {
@@ -165,6 +168,7 @@ export default function SettingsPage() {
   }
 
   return (
+    !mounted ? null :
     <div className="min-h-screen p-4" style={{ backgroundColor: '#f9fafb' }}>
       <div className="max-w-4xl mx-auto p-6">
         <div className="text-center mb-8">
