@@ -51,9 +51,9 @@ interface ContentPipelineResponse {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as ContentPipelineRequest;
+    const body = (await req.json()) as ContentPipelineRequest & { jobId?: string };
     const { primaryKeyword, topic, targetAudience, brief, outline, userSettings } = body;
-    const jobId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const jobId = body.jobId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     // Input validation
     if (!primaryKeyword || typeof primaryKeyword !== 'string' || primaryKeyword.trim().length === 0) {
@@ -94,7 +94,37 @@ export async function POST(req: NextRequest) {
       }
     };
 
-    // Stage 0: Generate Brief and Outline if not provided
+    // Stage 0: Keyword Research (moved earlier for better brief/outline)
+    let keywordResearchData: any = undefined;
+    try {
+      emitProgress(jobId, { type: 'stage', stage: 'keywordResearch', status: 'start', timestamp: Date.now() })
+      const keywordResearchResponse = await makeAPICall(
+        `${req.nextUrl.origin}/api/modular/keyword-research`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            primaryKeyword,
+            topic,
+            targetAudience,
+            userSettings
+          })
+        },
+        30000
+      );
+      if (keywordResearchResponse.ok) {
+        keywordResearchData = await keywordResearchResponse.json();
+        emitProgress(jobId, { type: 'stage', stage: 'keywordResearch', status: 'complete', timestamp: Date.now() })
+      } else {
+        const err = await keywordResearchResponse.text();
+        throw new Error(err);
+      }
+    } catch (err) {
+      console.warn('🔶 Keyword research failed or unavailable, continuing with fallback brief/outline.', err);
+      emitProgress(jobId, { type: 'stage', stage: 'keywordResearch', status: 'failed', data: { error: String(err) }, timestamp: Date.now() })
+    }
+
+    // Stage 1: Generate Brief and Outline if not provided
     let pipelineBrief = brief;
     let pipelineOutline = outline;
 
@@ -102,28 +132,45 @@ export async function POST(req: NextRequest) {
       console.log('📋 Stage 0a: Generating Content Brief');
       emitProgress(jobId, { type: 'stage', stage: 'brief', status: 'start', timestamp: Date.now() })
       try {
-        const briefResponse = await makeAPICall(
-          `${req.nextUrl.origin}/api/modular/generate-brief`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              primaryKeyword: primaryKeyword.trim(),
-              topic: topic?.trim() || '',
-              targetAudience: targetAudience?.trim() || ''
-            })
-          },
-          30000 // 30 second timeout
-        );
-
-        if (briefResponse.ok) {
-          pipelineBrief = await briefResponse.json();
-          console.log('✅ Content brief generated successfully');
-          emitProgress(jobId, { type: 'stage', stage: 'brief', status: 'complete', data: { hasBrief: true }, timestamp: Date.now() })
+        // Prefer AI content-brief if keyword research available
+        if (keywordResearchData) {
+          const cbResp = await makeAPICall(
+            `${req.nextUrl.origin}/api/modular/content-brief`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ keywordResearch: keywordResearchData, userSettings })
+            },
+            30000
+          );
+          if (cbResp.ok) {
+            pipelineBrief = await cbResp.json();
+          } else {
+            throw new Error(await cbResp.text());
+          }
         } else {
-          const errorText = await briefResponse.text();
-          throw new Error(`Brief generation failed: ${briefResponse.status} - ${errorText}`);
+          // Fallback mock brief
+          const briefResponse = await makeAPICall(
+            `${req.nextUrl.origin}/api/modular/generate-brief`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                primaryKeyword: primaryKeyword.trim(),
+                topic: topic?.trim() || '',
+                targetAudience: targetAudience?.trim() || ''
+              })
+            },
+            30000
+          );
+          if (briefResponse.ok) {
+            pipelineBrief = await briefResponse.json();
+          } else {
+            throw new Error(await briefResponse.text());
+          }
         }
+        console.log('✅ Content brief generated successfully');
+        emitProgress(jobId, { type: 'stage', stage: 'brief', status: 'complete', data: { hasBrief: true }, timestamp: Date.now() })
       } catch (error) {
         console.error('❌ Brief generation failed:', error);
         emitProgress(jobId, { type: 'stage', stage: 'brief', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })
@@ -139,28 +186,45 @@ export async function POST(req: NextRequest) {
       console.log('📋 Stage 0b: Generating Content Outline');
       emitProgress(jobId, { type: 'stage', stage: 'outline', status: 'start', timestamp: Date.now() })
       try {
-        const outlineResponse = await makeAPICall(
-          `${req.nextUrl.origin}/api/modular/generate-outline`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              primaryKeyword: primaryKeyword.trim(),
-              topic: topic?.trim() || '',
-              targetAudience: targetAudience?.trim() || ''
-            })
-          },
-          30000 // 30 second timeout
-        );
-
-        if (outlineResponse.ok) {
-          pipelineOutline = await outlineResponse.json();
-          console.log('✅ Content outline generated successfully');
-          emitProgress(jobId, { type: 'stage', stage: 'outline', status: 'complete', data: { sections: pipelineOutline?.mainSections?.length || 0 }, timestamp: Date.now() })
+        // Prefer AI outline-generation if brief available
+        if (pipelineBrief && pipelineBrief.audienceProfile) {
+          const olResp = await makeAPICall(
+            `${req.nextUrl.origin}/api/modular/outline-generation`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contentBrief: pipelineBrief, userSettings })
+            },
+            30000
+          );
+          if (olResp.ok) {
+            pipelineOutline = await olResp.json();
+          } else {
+            throw new Error(await olResp.text());
+          }
         } else {
-          const errorText = await outlineResponse.text();
-          throw new Error(`Outline generation failed: ${outlineResponse.status} - ${errorText}`);
+          // Fallback mock outline
+          const outlineResponse = await makeAPICall(
+            `${req.nextUrl.origin}/api/modular/generate-outline`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                primaryKeyword: primaryKeyword.trim(),
+                topic: topic?.trim() || '',
+                targetAudience: targetAudience?.trim() || ''
+              })
+            },
+            30000
+          );
+          if (outlineResponse.ok) {
+            pipelineOutline = await outlineResponse.json();
+          } else {
+            throw new Error(await outlineResponse.text());
+          }
         }
+        console.log('✅ Content outline generated successfully');
+        emitProgress(jobId, { type: 'stage', stage: 'outline', status: 'complete', data: { sections: pipelineOutline?.mainSections?.length || 0 }, timestamp: Date.now() })
       } catch (error) {
         console.error('❌ Outline generation failed:', error);
         emitProgress(jobId, { type: 'stage', stage: 'outline', status: 'failed', data: { error: String(error) }, timestamp: Date.now() })

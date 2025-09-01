@@ -162,11 +162,32 @@ export default function MobileFixedInterface() {
             try {
               const payload = JSON.parse(evt.data)
               if (payload?.type === 'stage') {
-                const stage = payload.stage as string
+                const mapStageToName = (st: string) => {
+                  switch (st) {
+                    case 'keywordResearch': return 'Expert Keyword Research'
+                    case 'brief': return 'Strategic Content Brief'
+                    case 'outline': return 'Comprehensive Outline'
+                    case 'introduction': return 'Engaging Introduction'
+                    case 'sections': return 'Main Section Writing'
+                    case 'faqs': return 'FAQ Generation'
+                    case 'conclusion': return 'Compelling Conclusion'
+                    case 'assembly': return 'Content Assembly'
+                    case 'seoAnalysis': return 'SEO Analysis'
+                    case 'seoImplementation': return 'SEO Implementation'
+                    case 'humanization': return 'Content Humanization'
+                    case 'images': return 'Smart Image Enhancement'
+                    case 'professionalReview': return 'Professional Review'
+                    case 'authenticityReview': return 'AI Authenticity Review'
+                    case 'refinement': return 'Targeted Refinement'
+                    default: return st
+                  }
+                }
+                const stageName = mapStageToName(payload.stage)
                 setPipelineSteps(steps => steps.map(s => {
-                  if (stage.includes('sections') && s.name.includes('Main Section')) return s
-                  if (s.name.toLowerCase().includes(stage.toLowerCase()) || s.name.toLowerCase().includes(stage.replace(/([A-Z])/g,' $1').toLowerCase())) {
-                    return { ...s, status: payload.status === 'failed' ? 'failed' : payload.status === 'complete' ? 'completed' : 'running', progress: payload.status === 'complete' ? 100 : s.progress || 60 }
+                  if (s.name === stageName) {
+                    const status = payload.status === 'failed' ? 'failed' : payload.status === 'complete' ? 'completed' : 'running'
+                    const progress = status === 'completed' ? 100 : s.progress || 60
+                    return { ...s, status, progress }
                   }
                   return s
                 }))
