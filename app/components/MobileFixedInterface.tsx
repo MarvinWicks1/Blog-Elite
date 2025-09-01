@@ -198,14 +198,11 @@ export default function MobileFixedInterface() {
               }
             } catch (_) {}
           }
-          es.onerror = () => {
-            es.close()
-          }
+          es.onerror = () => { try { es.close() } catch {} }
         } catch (_) {}
       }
       
       // Finish progress on success
-      stopProgressInterval()
       setPipelineSteps(steps => steps.map(step => ({ ...step, status: 'completed', progress: 100 })))
       setOverallProgress(100)
       

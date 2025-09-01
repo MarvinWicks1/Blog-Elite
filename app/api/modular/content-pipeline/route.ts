@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { emitProgress } from '@/lib/progress-bus'
+import { emitProgress, setJobResult } from '@/lib/progress-bus'
 // Pipeline Orchestrator - Manages the entire content generation workflow
 interface ContentPipelineRequest {
   primaryKeyword: string;
@@ -1087,6 +1087,9 @@ export async function POST(req: NextRequest) {
       // @ts-ignore augment
       jobId
     };
+
+    // Save result for client retrieval via jobId if needed
+    try { setJobResult(jobId, response) } catch {}
 
     // Quality Threshold Enforcement: ensure >= 8/10 else trigger one automatic refinement retry
     try {

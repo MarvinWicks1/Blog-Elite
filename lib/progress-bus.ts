@@ -10,6 +10,7 @@ export type ProgressEvent =
   | { type: 'error'; message: string; timestamp: number }
 
 const channels = new Map<string, EventEmitter>()
+const jobResults = new Map<string, any>()
 
 export function getProgressChannel(jobId: string): EventEmitter {
   let emitter = channels.get(jobId)
@@ -33,5 +34,13 @@ export function closeProgress(jobId: string) {
     channel.removeAllListeners()
     channels.delete(jobId)
   }
+}
+
+export function setJobResult(jobId: string, result: any) {
+  jobResults.set(jobId, result)
+}
+
+export function getJobResult(jobId: string) {
+  return jobResults.get(jobId)
 }
 

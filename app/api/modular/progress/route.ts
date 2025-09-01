@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { getProgressChannel, closeProgress, type ProgressEvent } from '@/lib/progress-bus'
+import { getProgressChannel, type ProgressEvent } from '@/lib/progress-bus'
 
 export const dynamic = 'force-dynamic'
 
