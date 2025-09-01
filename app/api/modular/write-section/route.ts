@@ -7,6 +7,13 @@ export async function POST(req: NextRequest) {
     
     const sectionIndex = body?.sectionIndex || 0;
     const primaryKeyword = body?.primaryKeyword || 'topic';
+    const userSettings = body?.userSettings || {};
+    const provider = userSettings?.aiSettings?.selectedProvider || 'google';
+    const apiKey = userSettings?.aiSettings?.apiKeys?.google || process.env.GOOGLE_API_KEY;
+    const fallbackMode = provider === 'google' && !apiKey;
+    if (fallbackMode) {
+      console.warn('🟡 Write Section: Running in fallback mode (missing Google API key).');
+    }
     
     // Generate a mock section
     const mockSection = `## Section ${sectionIndex + 1}: Understanding ${primaryKeyword}

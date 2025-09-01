@@ -64,6 +64,39 @@ export default function MobileFixedInterface() {
     setFinalContent(null)
 
     try {
+      // Pull user settings (including API keys) from localStorage to send to the API
+      let userSettings: any = undefined
+      try {
+        const local = localStorage.getItem('blog-elite-settings')
+        if (local) {
+          const parsed = JSON.parse(local)
+          const provider = parsed?.aiProviders?.google?.enabled
+            ? 'google'
+            : parsed?.aiProviders?.openai?.enabled
+            ? 'openai'
+            : parsed?.aiProviders?.anthropic?.enabled
+            ? 'anthropic'
+            : 'google'
+          const model =
+            provider === 'google'
+              ? (parsed?.aiProviders?.google?.model || 'gemini-1.5-pro')
+              : provider === 'openai'
+              ? (parsed?.aiProviders?.openai?.model || 'gpt-4')
+              : (parsed?.aiProviders?.anthropic?.model || 'claude-3-sonnet-20240229')
+          userSettings = {
+            aiSettings: {
+              selectedProvider: provider,
+              selectedModel: model,
+              apiKeys: {
+                google: parsed?.aiProviders?.google?.apiKey || undefined,
+              },
+            },
+          }
+        }
+      } catch (_) {
+        // ignore settings parse errors
+      }
+
       const response = await fetch('/api/modular/content-pipeline', {
         method: 'POST',
         headers: {
@@ -73,6 +106,7 @@ export default function MobileFixedInterface() {
           primaryKeyword: primaryKeyword.trim(),
           topic: topic.trim(),
           targetAudience: targetAudience.trim(),
+          userSettings,
         }),
       })
 

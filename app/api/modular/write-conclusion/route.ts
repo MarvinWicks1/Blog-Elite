@@ -6,6 +6,13 @@ export async function POST(req: NextRequest) {
     console.log('🏁 Write Conclusion API - Received body:', JSON.stringify(body, null, 2));
     
     const primaryKeyword = body?.primaryKeyword || 'topic';
+    const userSettings = body?.userSettings || {};
+    const provider = userSettings?.aiSettings?.selectedProvider || 'google';
+    const apiKey = userSettings?.aiSettings?.apiKeys?.google || process.env.GOOGLE_API_KEY;
+    const fallbackMode = provider === 'google' && !apiKey;
+    if (fallbackMode) {
+      console.warn('🟡 Write Conclusion: Running in fallback mode (missing Google API key).');
+    }
     
     // Generate a mock conclusion
     const mockConclusion = `## Conclusion: Mastering ${primaryKeyword}

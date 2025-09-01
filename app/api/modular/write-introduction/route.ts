@@ -116,17 +116,15 @@ export async function POST(req: NextRequest) {
     const model = userSettings?.aiSettings?.selectedModel || 'gemini-1.5-pro';
     const apiKey = userSettings?.aiSettings?.apiKeys?.google || process.env.GOOGLE_API_KEY;
 
-    if (provider === 'google' && !apiKey) {
-      console.error('❌ Missing Google API key');
-      return NextResponse.json(
-        { error: 'Missing Google API key (set userSettings.aiSettings.apiKeys.google or process.env.GOOGLE_API_KEY)' },
-        { status: 400 }
-      );
+    // Allow mock fallback for local/dev if key missing
+    const fallbackMode = provider === 'google' && !apiKey;
+    if (fallbackMode) {
+      console.warn('🟡 Write Introduction: Running in fallback mode (missing Google API key).');
     }
 
     console.log('🤖 Using AI provider:', provider, 'model:', model);
 
-    // For now, return a mock introduction to test the pipeline
+    // For now, return a mock introduction to test the pipeline (and as fallback without key)
     const mockIntroduction = `Welcome to our comprehensive guide on ${primaryKeyword || 'this important topic'}. Whether you're just starting out or looking to deepen your knowledge, this article will provide you with valuable insights and practical advice.
 
 In today's fast-paced world, understanding ${primaryKeyword || 'this subject'} has become increasingly important. We'll explore the key concepts, share expert insights, and provide actionable strategies that you can implement right away.
