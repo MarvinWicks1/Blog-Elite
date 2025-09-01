@@ -258,6 +258,9 @@ REFINEMENT REQUIREMENTS:
 7. Ensure natural, human-like language flow
 8. Improve readability, engagement, and professional presentation
 9. Optimize for both human readers and search engines
+10. Remove duplicated sentences/paragraphs and repeated lines
+11. Replace generic statements with concrete, specific examples
+12. Ensure every section opens with a clear, non-redundant H2 line
 
 REFINEMENT PROCESS:
 - Rewrite sections that need significant improvement
